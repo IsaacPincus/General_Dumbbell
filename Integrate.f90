@@ -1,6 +1,7 @@
 module Integrate
     use Random_Numbers
     implicit none
+    real*8, parameter :: PI = 4*atan(1.0D0)
 
     contains
 
@@ -9,10 +10,13 @@ module Integrate
         real*8, intent(in) :: Q(3), a
         real*8, intent(in) :: delT(3,3)
         real*8, dimension(3,3) :: construct_B
-        real*8 :: Ql, aux, g, g_til, Ql2, Ql4, Ql6
+        real*8 :: Ql, aux, g, g_til, Ql2, Ql4, Ql6, a2, a4
         real*8, save :: C43 = 4.D0/3.D0
         real*8, save :: C83 = 8.D0/3.D0
         real*8, save :: C143 = 14.D0/3.D0
+
+        a2 = a**2
+        a4 = a2**2
 
         Ql2 = Q(1)**2 + Q(2)**2 + Q(3)**2
         Ql = sqrt(Ql2)

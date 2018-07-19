@@ -2,6 +2,8 @@ module Generate_Initial_Conditions
     use Random_Numbers
     implicit none
 
+    contains
+
     pure function beta(x,y)
         implicit none
         real*8, intent(in) :: x, y
@@ -119,9 +121,11 @@ module Generate_Initial_Conditions
     end function generate_Q_FF
 
     function spherical_unit_vectors(N, seed)
+
         implicit none
         integer*8, intent(inout) :: seed
         integer*8, intent(in) :: N
+        integer*8 :: i
         real*8 :: x1, x2, r1(1), r2(1)
         real*8, dimension(3,N) :: spherical_unit_vectors
 

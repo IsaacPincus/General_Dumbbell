@@ -2,6 +2,8 @@ module Random_Numbers
 
     implicit none
 
+    contains
+
     function shift_xor(val,shift)
         integer*8 :: shift_xor
         integer*8, intent(in) :: val, shift
