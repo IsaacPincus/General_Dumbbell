@@ -22,9 +22,10 @@ Program Dumbbell_Validation_tests
     subroutine Validation_tests()
         implicit none
         call test_eq_hookean_semimp
-        call test_Hookean_viscosity
-        call test_Hookean_psi2_with_HI
+        call test_Hookean_viscosity_semimp
+        call test_Hookean_psi2_with_HI_semimp
         call test_eq_FENE_semimp
+        call test_semimp_euler_equal
 
     end subroutine
 
@@ -117,7 +118,7 @@ Program Dumbbell_Validation_tests
         print *, ""
     end subroutine
 
-    subroutine test_Hookean_viscosity()
+    subroutine test_Hookean_viscosity_semimp()
         implicit none
 
         integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
@@ -224,7 +225,7 @@ Program Dumbbell_Validation_tests
         print *, ""
     end subroutine
 
-    subroutine test_Hookean_psi2_with_HI()
+    subroutine test_Hookean_psi2_with_HI_semimp()
         implicit none
 
         integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
@@ -479,4 +480,137 @@ Program Dumbbell_Validation_tests
 
         print *, ""
     end subroutine
+
+    subroutine test_semimp_euler_equal()
+        implicit none
+
+        integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
+        real*8 :: dt, Ql, Ql2, start_time, stop_time, sr, a, h, Beta, Bpsi, Bpsi2
+        real*8, dimension(2) :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2
+        real*8, dimension(3) :: F, dW, Qtemp, delX
+        real*8, dimension(3,3) :: k, tau
+        !large arrays must be declared allocatable so they go into heap, otherwise
+        !OpenMP threads run out of memory
+        real*8, dimension(:, :), allocatable :: Q_semimp, Q_euler
+
+        print *, "Running semimp vs euler Hookean test, h*=0.15, sr=1"
+
+        call date_and_time(values=time)
+        seed = time(8)*100 + time(7)*10
+
+        dt = 0.01D0
+        Nsteps = 100
+        Ntraj = 100000
+
+        allocate(Q_semimp(3,1:Ntraj), Q_euler(3,1:Ntraj))
+
+        sr = 1.D0;
+
+        k(:,:) = 0.D0
+        k(1,2) = 1.D0
+        k = sr*k
+
+        h = 0.15D0
+        a = sqrt(PI)*h
+
+        delX = (/1.D0, 0.D0, 0.D0/)
+
+        Aeta = 0.D0
+        Apsi = 0.D0
+        Apsi2 = 0.D0
+        Veta = 0.D0
+        Vpsi = 0.D0
+        Vpsi2 = 0.D0
+
+        tau = 0.D0
+
+        Q_semimp = generate_Q_FF(0.D0, 10000.D0, Ntraj, seed, 10000)
+        Q_euler = Q_semimp
+
+        call cpu_time(start_time)
+        !$ start_time = omp_get_wtime()
+
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q_euler, Q_semimp)
+        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
+
+        do steps = 1,Nsteps
+            !$OMP DO
+            do i = 1,Ntraj
+                dW = Wiener_step(seed, dt)
+                Q_semimp(:,i) =  step(Q_semimp(:,i), k, dt, 0.D0, 10000.D0, a, dW)
+                dW = Wiener_step(seed, dt)
+                Q_euler(:,i) = step(Q_euler(:,i), k, dt, a, dW)
+            end do
+            !$OMP END DO
+
+        end do
+        !$OMP END parallel
+
+        ! Measurement
+        do i = 1,Ntraj
+            Ql2 = Q_semimp(1,i)**2 + Q_semimp(2,i)**2 + Q_semimp(3,i)**2
+            Ql = sqrt(Ql2)
+            F(:) = (Ql - 0.D0)/(1.0D0-(Ql-0.D0)**2/10000.D0)*Q_semimp(:,i)/Ql
+            tau(:,:) = dyadic_prod(Q_semimp(:,i), F)
+
+            Beta = tau(1,2)
+            Bpsi = (tau(1,1) - tau(2,2))
+            Bpsi2 = (tau(2,2) - tau(3,3))
+            Aeta(1) = Aeta(1) + Beta
+            Apsi(1) = Apsi(1) + Bpsi
+            Apsi2(1) = Apsi2(1) + Bpsi2
+            Veta(1) = Veta(1) + Beta**2
+            Vpsi(1) = Vpsi(1) + Bpsi**2
+            Vpsi2(1) = Vpsi2(1) + Bpsi2**2
+
+            Ql2 = Q_euler(1,i)**2 + Q_euler(2,i)**2 + Q_euler(3,i)**2
+            Ql = sqrt(Ql2)
+            F(:) = (Ql - 0.D0)/(1.0D0-(Ql-0.D0)**2/10000.D0)*Q_euler(:,i)/Ql
+            tau(:,:) = dyadic_prod(Q_euler(:,i), F)
+
+            Beta = tau(1,2)
+            Bpsi = (tau(1,1) - tau(2,2))
+            Bpsi2 = (tau(2,2) - tau(3,3))
+            Aeta(2) = Aeta(2) + Beta
+            Apsi(2) = Apsi(2) + Bpsi
+            Apsi2(2) = Apsi2(2) + Bpsi2
+            Veta(2) = Veta(2) + Beta**2
+            Vpsi(2) = Vpsi(2) + Bpsi**2
+            Vpsi2(2) = Vpsi2(2) + Bpsi2**2
+        end do
+
+        Aeta = Aeta/(Ntraj*sr)
+        Veta = Veta/(Ntraj*sr**2)
+        Veta = sqrt((Veta - Aeta**2)/(Ntraj-1))
+
+        Apsi = Apsi/(Ntraj*sr**2)
+        Vpsi = Vpsi/(Ntraj*sr**4)
+        Vpsi = sqrt((Vpsi - Apsi**2)/(Ntraj-1))
+
+        Apsi2 = Apsi2/(Ntraj*sr**2)
+        Vpsi2 = Vpsi2/(Ntraj*sr**4)
+        Vpsi2 = sqrt((Vpsi2 - Apsi2**2)/(Ntraj-1))
+
+        call cpu_time(stop_time)
+        !$ stop_time = omp_get_wtime()
+        print *, "Run time:", &
+                stop_time - start_time, "seconds"
+
+        print *, "Aeta_semimp-Aeta_euler = ", (Aeta(2) - Aeta(1)), " +- ", (Veta(2) + Veta(1))
+        print *, "Apsi_semimp-Apsi_euler = ", (Apsi(2) - Apsi(1)), " +- ", (Vpsi(2) + Vpsi(1))
+        print *, "Apsi2_semimp-Apsi2_euler = ", (Apsi2(2) - Apsi2(1)), " +- ", (Vpsi2(2) + Vpsi2(1))
+
+        !Check that both Qavg and S are within acceptable range
+        call assertEquals(Aeta(1), Aeta(2), (Veta(2) + Veta(1)), &
+                          "Aeta_semimp != Aeta_euler, h*=0.15, sr=1")
+        call assertEquals(Apsi(1), Apsi(2), (Vpsi(2) + Vpsi(1)), &
+                          "Apsi_semimp != Apsi_euler, h*=0.15, sr=1")
+        call assertEquals(Apsi2(1), Apsi2(2), (Vpsi2(2) + Vpsi2(1)), &
+                          "Apsi2_semimp != Apsi2_euler, h*=0.15, sr=1")
+
+        deallocate(Q_euler, Q_semimp)
+        print *, ""
+    end subroutine
+
+
 End Program

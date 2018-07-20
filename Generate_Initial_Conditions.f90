@@ -130,15 +130,12 @@ module Generate_Initial_Conditions
         real*8, dimension(3,N) :: spherical_unit_vectors
 
         do i=1,N
-            r1 = rand_floats(seed,1)
-            r2 = rand_floats(seed,1)
-            x1 = r1(1)*2.D0 - 1.D0
-            x2 = r2(1)*2.D0 - 1.D0
-            do while ((x1**2 + x2**2).ge.1.D0)
+            do while (.True.)
                 r1 = rand_floats(seed,1)
                 r2 = rand_floats(seed,1)
                 x1 = r1(1)*2.D0 - 1.D0
                 x2 = r2(1)*2.D0 - 1.D0
+                if ((x1**2 + x2**2).lt.1.D0) EXIT
             end do
             spherical_unit_vectors(1,i) = 2.D0*x1*sqrt(1.D0-x1**2-x2**2)
             spherical_unit_vectors(2,i) = 2.D0*x2*sqrt(1.D0-x1**2-x2**2)

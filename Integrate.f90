@@ -86,15 +86,15 @@ module Integrate
         RdotB2_L = sqrt(RdotB2(1)**2 + RdotB2(2)**2 + RdotB2(3)**2)
 
         Qlength = find_roots( -(2.D0*Q0+L), -b+Q0**2-RdotB2_L+2.d0*L*Q0, &
-                                RdotB2_L*Q0+L*(b-Q0**2), Q0, sqrt(b) )
+                                RdotB2_L*Q0+L*(b-Q0**2), Q0-sqrt(b), Q0+sqrt(b) )
 
         step_semimp_FF = RHS*Qlength/L
 
     end function step_semimp_FF
 
-    pure function find_roots(a, b, c, Q0, lim)
+    pure function find_roots(a, b, c, lower_bound, upper_bound)
         implicit none
-        real*8, intent(in) :: a, b, c, Q0, lim
+        real*8, intent(in) :: a, b, c, lower_bound, upper_bound
         real*8 :: find_roots
         real*8 :: Q, R, theta, x
         integer :: i
@@ -106,7 +106,7 @@ module Integrate
 
         do i=-1,1
             x = -2.D0*sqrt(Q)*cos((theta + real(i)*PI*2.D0)/3.D0)-a/3.D0
-            if ((x.ge.(Q0-lim)).and.(x.le.(Q0+lim))) then
+            if ((x.ge.lower_bound).and.(x.le.upper_bound)) then
                 find_roots = x
                 EXIT
             end if
