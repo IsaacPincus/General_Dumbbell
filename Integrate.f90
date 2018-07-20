@@ -2,13 +2,21 @@ module Integrate
     use Random_Numbers
     implicit none
     real*8, parameter :: PI = 4*atan(1.0D0)
+    real*8, parameter, dimension(3,3) :: delT = reshape((/1, 0, 0, &
+                                                          0, 1, 0, &
+                                                          0, 0, 1/), &
+                                                        shape(delT))
+
+    interface step
+        module procedure step_semimp_FF
+        module procedure step_Euler_Hookean
+    end interface
 
     contains
 
-    function construct_B(Q, a, delT)
+    function construct_B(Q, a)
         implicit none
         real*8, intent(in) :: Q(3), a
-        real*8, intent(in) :: delT(3,3)
         real*8, dimension(3,3) :: construct_B
         real*8 :: Ql, aux, g, g_til, Ql2, Ql4, Ql6, a2, a4
         real*8, save :: C43 = 4.D0/3.D0
@@ -31,25 +39,43 @@ module Integrate
 
     end function construct_B
 
-    function step(Q, k, dt, Q0, delT, b, a, dW)
+    function step_Euler_Hookean(Q, k, dt, a, dW)
+        implicit none
+        real*8, intent(in) :: Q(3), dt, a, dW(3)
+        real*8, intent(in) :: k(3,3)
+        real*8 :: Ql
+        real*8, dimension(3) :: F
+        real*8, dimension(3,3) :: B, BdotB
+        real*8, dimension(3) :: step_Euler_Hookean
+
+        B = construct_B(Q, a)
+
+        BdotB = matmul(B, B)
+
+        step_Euler_Hookean = Q + (ten_vec_dot(k, Q) - 0.5*ten_vec_dot(BdotB,Q))*dt &
+                               + ten_vec_dot(B, dW)
+
+    end function
+
+    function step_semimp_FF(Q, k, dt, Q0, b, a, dW)
         implicit none
         real*8, intent(in) :: Q(3), dt, Q0, b, a, dW(3)
-        real*8, intent(in) :: delT(3,3), k(3,3)
+        real*8, intent(in) :: k(3,3)
         real*8 :: Ql, L, RdotB2_L, Qlength, temp_R1, temp_R2
         real*8, dimension(3) :: F, u, RHS, Qpred, RdotB2
         real*8, dimension(3,3) :: B1, B2, B1B1, B2B2
-        real*8, dimension(3) :: step
+        real*8, dimension(3) :: step_semimp_FF
 
         Ql = sqrt(Q(1)**2 + Q(2)**2 + Q(3)**2)
         F = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/b)*Q/Ql
 
-        B1 = construct_B(Q, a, delT)
+        B1 = construct_B(Q, a)
 
         B1B1 = matmul(B1,B1)
         Qpred = Q(:) + (ten_vec_dot(k,Q) - 0.5D0*ten_vec_dot(B1B1,F))*dt &
                   + ten_vec_dot(B1,dW)
 
-        B2 = construct_B(Qpred, a, delT)
+        B2 = construct_B(Qpred, a)
         B2B2 = matmul(B2,B2)
         RHS = Q + 0.5D0*(ten_vec_dot(k,Q+Qpred) - 0.5D0*ten_vec_dot(B1B1,F))*dt &
                 + ten_vec_dot(B1,dW)
@@ -62,9 +88,9 @@ module Integrate
         Qlength = find_roots( -(2.D0*Q0+L), -b+Q0**2-RdotB2_L+2.d0*L*Q0, &
                                 RdotB2_L*Q0+L*(b-Q0**2), Q0, sqrt(b) )
 
-        step = RHS*Qlength/L
+        step_semimp_FF = RHS*Qlength/L
 
-    end function step
+    end function step_semimp_FF
 
     pure function find_roots(a, b, c, Q0, lim)
         implicit none

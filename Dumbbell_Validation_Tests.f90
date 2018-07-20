@@ -34,7 +34,7 @@ Program Dumbbell_Validation_tests
         integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
         real*8 :: dt, Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time
         real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, delT, tau
+        real*8, dimension(3,3) :: k, tau
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -51,11 +51,6 @@ Program Dumbbell_Validation_tests
         allocate(Q(3,1:Ntraj))
 
         k(:,:) = 0.D0
-
-        delT(:,:) = 0.D0
-        delT(1,1) = 1.D0
-        delT(2,2) = 1.D0
-        delT(3,3) = 1.D0
 
         delX = (/1.D0, 0.D0, 0.D0/)
 
@@ -76,7 +71,7 @@ Program Dumbbell_Validation_tests
             !$OMP DO
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
-                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, delT, 10000.D0, 0.D0, dW)
+                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, 10000.D0, 0.D0, dW)
             end do
             !$OMP END DO
 
@@ -129,7 +124,7 @@ Program Dumbbell_Validation_tests
         real*8 :: dt, Ql, Ql2, start_time, stop_time, sr
         real*8 :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Beta, Bpsi, Bpsi2
         real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, delT, tau
+        real*8, dimension(3,3) :: k, tau
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -150,11 +145,6 @@ Program Dumbbell_Validation_tests
         k(:,:) = 0.D0
         k(1,2) = 1.D0
         k = sr*k
-
-        delT(:,:) = 0.D0
-        delT(1,1) = 1.D0
-        delT(2,2) = 1.D0
-        delT(3,3) = 1.D0
 
         delX = (/1.D0, 0.D0, 0.D0/)
 
@@ -179,7 +169,7 @@ Program Dumbbell_Validation_tests
             !$OMP DO
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
-                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, delT, 10000.D0, 0.D0, dW)
+                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, 10000.D0, 0.D0, dW)
             end do
             !$OMP END DO
 
@@ -241,7 +231,7 @@ Program Dumbbell_Validation_tests
         real*8 :: dt, Ql, Ql2, start_time, stop_time, sr, h, a
         real*8 :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Beta, Bpsi, Bpsi2
         real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, delT, tau
+        real*8, dimension(3,3) :: k, tau
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -266,11 +256,6 @@ Program Dumbbell_Validation_tests
         k(1,2) = 1.D0
         k = sr*k
 
-        delT(:,:) = 0.D0
-        delT(1,1) = 1.D0
-        delT(2,2) = 1.D0
-        delT(3,3) = 1.D0
-
         delX = (/1.D0, 0.D0, 0.D0/)
 
         Aeta = 0.D0
@@ -294,7 +279,7 @@ Program Dumbbell_Validation_tests
             !$OMP DO
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
-                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, delT, 10000.D0, a, dW)
+                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, 10000.D0, a, dW)
             end do
             !$OMP END DO
 
@@ -352,7 +337,7 @@ Program Dumbbell_Validation_tests
         integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
         real*8 :: dt, Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time, b
         real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, delT, tau
+        real*8, dimension(3,3) :: k, tau
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -369,11 +354,6 @@ Program Dumbbell_Validation_tests
         allocate(Q(3,1:Ntraj))
 
         k(:,:) = 0.D0
-
-        delT(:,:) = 0.D0
-        delT(1,1) = 1.D0
-        delT(2,2) = 1.D0
-        delT(3,3) = 1.D0
 
         delX = (/1.D0, 0.D0, 0.D0/)
 
@@ -396,7 +376,7 @@ Program Dumbbell_Validation_tests
             !$OMP DO
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
-                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, delT, b, 0.D0, dW)
+                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, b, 0.D0, dW)
             end do
             !$OMP END DO
 
@@ -454,7 +434,7 @@ Program Dumbbell_Validation_tests
             !$OMP DO
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
-                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, delT, b, 0.D0, dW)
+                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, b, 0.D0, dW)
             end do
             !$OMP END DO
 
