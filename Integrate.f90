@@ -1,5 +1,5 @@
 module Integrate
-    use Random_Numbers
+    use Dumbbell_util
     implicit none
     real*8, parameter :: PI = 4*atan(1.0D0)
     real*8, parameter, dimension(3,3) :: delT = reshape((/1, 0, 0, &
@@ -89,9 +89,9 @@ module Integrate
 
     end function
 
-    function step_semimp_FF(Q, k, dt, Q0, b, a, dW)
+    function step_semimp_FF(Q, k, dt, Q0, alpha, a, dW)
         implicit none
-        real*8, intent(in) :: Q(3), dt, Q0, b, a, dW(3)
+        real*8, intent(in) :: Q(3), dt, Q0, alpha, a, dW(3)
         real*8, intent(in) :: k(3,3)
         real*8 :: Ql, L, RdotB2_L, Qlength, temp_R1, temp_R2
         real*8, dimension(3) :: F, u, RHS, Qpred, RdotB2
@@ -99,7 +99,7 @@ module Integrate
         real*8, dimension(3) :: step_semimp_FF
 
         Ql = sqrt(Q(1)**2 + Q(2)**2 + Q(3)**2)
-        F = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/b)*Q/Ql
+        F = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/alpha)*Q/Ql
 
         B1 = construct_B_RPY(Q, a)
 
@@ -114,19 +114,19 @@ module Integrate
 
         L =  sqrt(RHS(1)**2 + RHS(2)**2 + RHS(3)**2)
         u = RHS/L
-        RdotB2 = ten_vec_dot(b*B2B2*dt/4.D0,u)
+        RdotB2 = ten_vec_dot(alpha*B2B2*dt/4.D0,u)
         RdotB2_L = sqrt(RdotB2(1)**2 + RdotB2(2)**2 + RdotB2(3)**2)
 
-        Qlength = find_roots( -(2.D0*Q0+L), -b+Q0**2-RdotB2_L+2.d0*L*Q0, &
-                                RdotB2_L*Q0+L*(b-Q0**2), Q0-sqrt(b), Q0+sqrt(b) )
+        Qlength = find_roots( -(2.D0*Q0+L), -alpha+Q0**2-RdotB2_L+2.d0*L*Q0, &
+                                RdotB2_L*Q0+L*(alpha-Q0**2), Q0-sqrt(alpha), Q0+sqrt(alpha) )
 
         step_semimp_FF = RHS*Qlength/L
 
     end function step_semimp_FF
 
-    function step_semimp_FF_test(Q, k, dt, Q0, b, a, dW, dummy)
+    function step_semimp_FF_test(Q, k, dt, Q0, alpha, a, dW, dummy)
         implicit none
-        real*8, intent(in) :: Q(3), dt, Q0, b, a, dW(3), dummy
+        real*8, intent(in) :: Q(3), dt, Q0, alpha, a, dW(3), dummy
         real*8, intent(in) :: k(3,3)
         real*8 :: Ql, L, RdotB2_L, Qlength, temp_R1, temp_R2
         real*8, dimension(3) :: F, u, RHS, Qpred, RdotB2
@@ -134,7 +134,7 @@ module Integrate
         real*8, dimension(3) :: step_semimp_FF_test
 
         Ql = sqrt(Q(1)**2 + Q(2)**2 + Q(3)**2)
-        F = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/b)*Q/Ql
+        F = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/alpha)*Q/Ql
 
         B1 = construct_B_RPY(Q, a)
 
@@ -146,11 +146,11 @@ module Integrate
 
         L =  sqrt(RHS(1)**2 + RHS(2)**2 + RHS(3)**2)
         u = RHS/L
-        RdotB2 = ten_vec_dot(b*B1B1*dt/4.D0,u)
+        RdotB2 = ten_vec_dot(alpha*B1B1*dt/4.D0,u)
         RdotB2_L = sqrt(RdotB2(1)**2 + RdotB2(2)**2 + RdotB2(3)**2)
 
-        Qlength = find_roots( -(2.D0*Q0+L), -b+Q0**2-RdotB2_L+2.d0*L*Q0, &
-                                RdotB2_L*Q0+L*(b-Q0**2), Q0-sqrt(b), Q0+sqrt(b) )
+        Qlength = find_roots( -(2.D0*Q0+L), -alpha+Q0**2-RdotB2_L+2.d0*L*Q0, &
+                                RdotB2_L*Q0+L*(alpha-Q0**2), Q0-sqrt(alpha), Q0+sqrt(alpha) )
 
         step_semimp_FF_test = RHS*Qlength/L
 

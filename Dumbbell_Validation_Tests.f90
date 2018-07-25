@@ -1,5 +1,5 @@
 Program Dumbbell_Validation_tests
-    use Random_Numbers
+    use Dumbbell_util
     use Generate_Initial_Conditions
     use Integrate
     use fruit
@@ -21,21 +21,38 @@ Program Dumbbell_Validation_tests
 
     subroutine Validation_tests()
         implicit none
-        call test_eq_hookean_semimp
-        call test_Hookean_viscosity_semimp
-        call test_Hookean_psi2_with_HI_semimp
-        call test_Hookean_psi2_with_HI_semimp_2nd_method
-        call test_eq_FENE_semimp
-        call test_semimp_euler_equal
-        call test_FENE_HI_shear_semimp_vs_Kailash_code
+        integer*8 :: val_count_fail, val_count_suc, val_count_total
+        ! Validation tests pass if results are within two
+        ! standard deviations of target result,
+        ! i.e. a 95% confidence level
+        val_count_fail = 0
+        val_count_suc = 0
+        val_count_total = 0
+        print *, "We expect about 5% of tests to fail by chance, or ~1/20"
+        print *, ""
+        call test_eq_hookean_semimp(0.01D0, 1000, 10000)
+        call test_Hookean_viscosity_semimp(0.01D0, 100, 100000)
+        call test_Hookean_psi2_with_HI_semimp(0.05D0, 1000, 100000)
+        call test_Hookean_psi2_with_HI_semimp_2nd_method(0.05D0, 1000, 100000)
+        call test_eq_FENE_semimp(0.01D0, 1000, 10000)
+        call test_semimp_euler_equal(0.01D0, 100, 10000)
+        call test_FENE_HI_shear_semimp_vs_Kailash_code(0.01D0, 1000, 10000)
+
+        !p-test on likelihood
+        call getFailedCount(val_count_fail)
+        call getTotalCount(val_count_total)
+        val_count_suc = val_count_total - val_count_fail
+
 
     end subroutine
 
-    subroutine test_eq_hookean_semimp()
+    subroutine test_eq_hookean_semimp(dt, Nsteps, Ntraj)
         implicit none
 
-        integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
-        real*8 :: dt, Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i
+        real*8 :: Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time
         real*8, dimension(3) :: F, dW, Qtemp, delX
         real*8, dimension(3,3) :: k, tau
         !large arrays must be declared allocatable so they go into heap, otherwise
@@ -46,10 +63,6 @@ Program Dumbbell_Validation_tests
 
         call date_and_time(values=time)
         seed = time(8)*100 + time(7)*10
-
-        dt = 0.01D0
-        Nsteps = 1000
-        Ntraj = 100000
 
         allocate(Q(3,1:Ntraj))
 
@@ -110,9 +123,9 @@ Program Dumbbell_Validation_tests
         print *, "S = ", S, " +- ", Serr
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(sqrt(3.D0), Qavg, Vqavg*3.D0, &
+        call assertEquals(sqrt(3.D0), Qavg, Vqavg*2.D0, &
                           "Qavg != sqrt(3) for sr=0 Hookean Dumbbell (semimp)")
-        call assertEquals(0.D0, S, Serr*3.D0, &
+        call assertEquals(0.D0, S, Serr*2.D0, &
                           "S != 0 for sr=0 Hookean Dumbbell (semimp)")
 
         deallocate(Q)
@@ -120,11 +133,13 @@ Program Dumbbell_Validation_tests
         print *, ""
     end subroutine
 
-    subroutine test_Hookean_viscosity_semimp()
+    subroutine test_Hookean_viscosity_semimp(dt, Nsteps, Ntraj)
         implicit none
 
-        integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
-        real*8 :: dt, Ql, Ql2, start_time, stop_time, sr
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i
+        real*8 :: Ql, Ql2, start_time, stop_time, sr
         real*8 :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Beta, Bpsi, Bpsi2
         real*8, dimension(3) :: F, dW, Qtemp, delX
         real*8, dimension(3,3) :: k, tau
@@ -136,10 +151,6 @@ Program Dumbbell_Validation_tests
 
         call date_and_time(values=time)
         seed = time(8)*100 + time(7)*10
-
-        dt = 0.01D0
-        Nsteps = 100
-        Ntraj = 100000
 
         allocate(Q(3,1:Ntraj))
 
@@ -218,21 +229,23 @@ Program Dumbbell_Validation_tests
         print *, "Apsi-0.52848 = ", (Apsi-0.52848D0), " +- ", Vpsi
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(0.63212D0, Aeta, Veta*3.D0, &
+        call assertEquals(0.63212D0, Aeta, Veta*2.D0, &
                           "eta != 0.63212 for sr=1 Hookean Dumbbell (semimp)")
-        call assertEquals(0.52848D0, Apsi, Vpsi*3.D0, &
+        call assertEquals(0.52848D0, Apsi, Vpsi*2.D0, &
                           "psi_1 != 0.52848 for sr=1 Hookean Dumbbell (semimp)")
 
         deallocate(Q)
         print *, ""
     end subroutine
 
-    subroutine test_Hookean_psi2_with_HI_semimp()
+    subroutine test_Hookean_psi2_with_HI_semimp(dt, Nsteps, Ntraj)
 
         implicit none
 
-        integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
-        real*8 :: dt, Ql, Ql2, start_time, stop_time, sr, h, a
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, h, a
         real*8 :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Beta, Bpsi, Bpsi2
         real*8, dimension(3) :: F, dW, Qtemp, delX
         real*8, dimension(3,3) :: k, tau
@@ -244,10 +257,6 @@ Program Dumbbell_Validation_tests
 
         call date_and_time(values=time)
         seed = time(8)*100 + time(7)*10
-
-        dt = 0.3D0
-        Nsteps = 100
-        Ntraj = 1000000
 
         allocate(Q(3,1:Ntraj))
 
@@ -328,19 +337,21 @@ Program Dumbbell_Validation_tests
         print *, "Apsi2+0.01348 = ", (Apsi2+0.01348D0), " +- ", Vpsi2
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(-0.01348D0, Apsi2, Vpsi2*3.D0, &
+        call assertEquals(-0.01348D0, Apsi2, Vpsi2*2.D0, &
                           "psi_2 != -0.01348 for sr=1, hstar=0.15 Hookean Dumbbell (semimp)")
 
         deallocate(Q)
         print *, ""
     end subroutine
 
-    subroutine test_Hookean_psi2_with_HI_semimp_2nd_method()
+    subroutine test_Hookean_psi2_with_HI_semimp_2nd_method(dt, Nsteps, Ntraj)
 
         implicit none
 
-        integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
-        real*8 :: dt, Ql, Ql2, start_time, stop_time, sr, h, a
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, h, a
         real*8 :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Beta, Bpsi, Bpsi2
         real*8, dimension(3) :: F, dW, Qtemp, delX
         real*8, dimension(3,3) :: k, tau
@@ -352,10 +363,6 @@ Program Dumbbell_Validation_tests
 
         call date_and_time(values=time)
         seed = time(8)*100 + time(7)*10
-
-        dt = 0.3D0
-        Nsteps = 100
-        Ntraj = 1000000
 
         allocate(Q(3,1:Ntraj))
 
@@ -436,18 +443,20 @@ Program Dumbbell_Validation_tests
         print *, "Apsi2+0.01348 = ", (Apsi2+0.01348D0), " +- ", Vpsi2
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(-0.01348D0, Apsi2, Vpsi2*3.D0, &
+        call assertEquals(-0.01348D0, Apsi2, Vpsi2*2.D0, &
                           "psi_2 != -0.01348 for sr=1, hstar=0.15 Hookean Dumbbell (semimp)")
 
         deallocate(Q)
         print *, ""
     end subroutine
 
-    subroutine test_eq_FENE_semimp()
+    subroutine test_eq_FENE_semimp(dt, Nsteps, Ntraj)
         implicit none
 
-        integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
-        real*8 :: dt, Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time, b
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i
+        real*8 :: Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time, b
         real*8, dimension(3) :: F, dW, Qtemp, delX
         real*8, dimension(3,3) :: k, tau
         !large arrays must be declared allocatable so they go into heap, otherwise
@@ -458,10 +467,6 @@ Program Dumbbell_Validation_tests
 
         call date_and_time(values=time)
         seed = time(8)*100 + time(7)*10
-
-        dt = 0.05D0
-        Nsteps = 1000
-        Ntraj = 100000
 
         allocate(Q(3,1:Ntraj))
 
@@ -524,9 +529,9 @@ Program Dumbbell_Validation_tests
         print *, "S = ", S, " +- ", Serr
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(sqrt(3*b/(b+5)), Qavg, Vqavg*3.D0, &
+        call assertEquals(sqrt(3*b/(b+5)), Qavg, Vqavg*2.D0, &
                           "Qavg != sqrt(3*b/(b+5)) for sr=0, b=10 FENE Dumbbell (semimp)")
-        call assertEquals(0.D0, S, Serr*3.D0, &
+        call assertEquals(0.D0, S, Serr*2.D0, &
                           "S != 0 for sr=0, b=10 FENE Dumbbell (semimp)")
 
         print *, ""
@@ -582,9 +587,9 @@ Program Dumbbell_Validation_tests
         print *, "S = ", S, " +- ", Serr
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(sqrt(3*b/(b+5)), Qavg, Vqavg*3.D0, &
+        call assertEquals(sqrt(3*b/(b+5)), Qavg, Vqavg*2.D0, &
                           "Qavg != sqrt(3*b/(b+5)) for sr=0, b=50 FENE Dumbbell (semimp)")
-        call assertEquals(0.D0, S, Serr*3.D0, &
+        call assertEquals(0.D0, S, Serr*2.D0, &
                           "S != 0 for sr=0, b=50 FENE Dumbbell (semimp)")
 
         deallocate(Q)
@@ -592,11 +597,13 @@ Program Dumbbell_Validation_tests
         print *, ""
     end subroutine
 
-    subroutine test_semimp_euler_equal()
+    subroutine test_semimp_euler_equal(dt, Nsteps, Ntraj)
         implicit none
 
-        integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj
-        real*8 :: dt, Ql, Ql2, start_time, stop_time, sr, a, h, Beta, Bpsi, Bpsi2
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, a, h, Beta, Bpsi, Bpsi2
         real*8, dimension(2) :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2
         real*8, dimension(3) :: F, dW, Qtemp, delX
         real*8, dimension(3,3) :: k, tau
@@ -608,10 +615,6 @@ Program Dumbbell_Validation_tests
 
         call date_and_time(values=time)
         seed = time(8)*100 + time(7)*10
-
-        dt = 0.01D0
-        Nsteps = 100
-        Ntraj = 100000
 
         allocate(Q_semimp(3,1:Ntraj), Q_euler(3,1:Ntraj))
 
@@ -712,21 +715,24 @@ Program Dumbbell_Validation_tests
         print *, "Apsi2_semimp-Apsi2_euler = ", (Apsi2(2) - Apsi2(1)), " +- ", (Vpsi2(2) + Vpsi2(1))
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(Aeta(1), Aeta(2), (Veta(2) + Veta(1)), &
+        call assertEquals(Aeta(1), Aeta(2), 2*sqrt(Veta(2)**2 + Veta(1)**2), &
                           "Aeta_semimp != Aeta_euler, h*=0.15, sr=1")
-        call assertEquals(Apsi(1), Apsi(2), (Vpsi(2) + Vpsi(1)), &
+        call assertEquals(Apsi(1), Apsi(2), 2*sqrt(Vpsi(2)**2 + Vpsi(1)**2), &
                           "Apsi_semimp != Apsi_euler, h*=0.15, sr=1")
-        call assertEquals(Apsi2(1), Apsi2(2), (Vpsi2(2) + Vpsi2(1)), &
+        call assertEquals(Apsi2(1), Apsi2(2), 2*sqrt(Vpsi2(2)**2 + Vpsi2(1)**2), &
                           "Apsi2_semimp != Apsi2_euler, h*=0.15, sr=1")
 
         deallocate(Q_euler, Q_semimp)
         print *, ""
     end subroutine
 
-    subroutine test_FENE_HI_shear_semimp_vs_Kailash_code()
+    subroutine test_FENE_HI_shear_semimp_vs_Kailash_code(dt, Nsteps, Ntraj)
         implicit none
-        integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj, shear_steps
-        real*8 :: dt, Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time, b, sr_vals(5), h, a, sr, Q0
+
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i, shear_steps
+        real*8 :: Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time, b, sr_vals(5), h, a, sr, Q0
         real*8 :: Aeta(5), Veta(5), Apsi(5), Vpsi(5), Beta, Bpsi
         real*8 :: K_Aeta(5), K_Veta(5), K_Apsi(5), K_Vpsi(5)
         real*8, dimension(3) :: F, dW, Qtemp, delX
@@ -739,10 +745,6 @@ Program Dumbbell_Validation_tests
 
         call date_and_time(values=time)
         seed = time(8)*100 + time(7)*10
-
-        dt = 0.01D0
-        Nsteps = 1000
-        Ntraj = 200000
 
         allocate(Q(3,1:Ntraj), Q_eq_VR(3,1:Ntraj))
 
@@ -835,10 +837,10 @@ Program Dumbbell_Validation_tests
 
 !        print *, "Q-(3*b)/(b+5) = ", (Qavg-sqrt(3*b/(b+5))), " +- ", Vqavg
 !        print *, "S = ", S, " +- ", Serr
-        print *, "Aeta values are", Aeta
-        print *, "Veta values are", Veta
-        print *, "Apsi values are", Apsi
-        print *, "Vpsi values are", Vpsi
+!        print *, "Aeta values are", Aeta
+!        print *, "Veta values are", Veta
+!        print *, "Apsi values are", Apsi
+!        print *, "Vpsi values are", Vpsi
 
         !Check that my results agree with Kailash's results
         K_Aeta = (/1.36355, 1.36426, 1.20931, 0.25452, 0.15777/)
@@ -846,12 +848,19 @@ Program Dumbbell_Validation_tests
         K_Apsi = (/3.53116, 3.64638, 2.79976, 0.09888, 0.03609/)
         K_Vpsi = (/0.03368, 0.0078, 0.00212, 0.00005, 0.00002/)
         do shear_steps = 1,size(sr_vals)
-            call assertEquals(Aeta(shear_steps), K_Aeta(shear_steps), &
-                              Veta(shear_steps)+K_Veta(shear_steps), "Aeta")
-            call assertEquals(Apsi(shear_steps), K_Apsi(shear_steps), &
-                              Vpsi(shear_steps)+K_Vpsi(shear_steps), "Veta")
+            print *, "sr=", sr_vals(shear_steps)
+            print *, "My eta=", Aeta(shear_steps), "+-", Veta(shear_steps)
+            print *, "Kailash eta=", K_Aeta(shear_steps), "+-", K_Veta(shear_steps)
+            call assertEquals(K_Aeta(shear_steps), Aeta(shear_steps), &
+                              2*sqrt(Veta(shear_steps)**2+K_Veta(shear_steps)**2), "Aeta")
+            print *, ""
+            print *, "My psi=", Apsi(shear_steps), "+-", Vpsi(shear_steps)
+            print *, "Kailash psi=", K_Apsi(shear_steps), "+-", K_Vpsi(shear_steps)
+
+            call assertEquals(K_Apsi(shear_steps), Apsi(shear_steps), &
+                              2*sqrt(Vpsi(shear_steps)**2+K_Vpsi(shear_steps)**2), "Veta")
+            print *, ""
         end do
-        print *, ""
 
     end subroutine
 

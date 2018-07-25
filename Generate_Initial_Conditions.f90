@@ -1,50 +1,41 @@
 module Generate_Initial_Conditions
-    use Random_Numbers
+    use Dumbbell_util
     implicit none
 
     contains
 
-    pure function beta(x,y)
+    function psiQ_FF(Q, alpha, Q0, Jeq)
         implicit none
-        real*8, intent(in) :: x, y
-        real*8 :: beta
-
-        beta = log_gamma(x) + log_gamma(y) - log_gamma(x+y)
-        beta = exp(beta)
-    end function beta
-
-    function psiQ_FF(Q, b, Q0, Jeq)
-        implicit none
-        real*8, intent(in) :: Q, b, Q0, Jeq
+        real*8, intent(in) :: Q, alpha, Q0, Jeq
         real*8 :: psiQ_FF
 
-    !    Jeq = (1.D0/(b+3.D0)+Q0**2/b)*beta(0.5D0,(b+2.D0)/2.D0)*b**(1.5D0)
+    !    Jeq = (1.D0/(alpha+3.D0)+Q0**2/alpha)*beta(0.5D0,(alpha+2.D0)/2.D0)*alpha**(1.5D0)
 
-        psiQ_FF = Q**2*(1.D0-(Q-Q0)**2.D0/b)**(b/2.D0)/Jeq
+        psiQ_FF = Q**2*(1.D0-(Q-Q0)**2.D0/alpha)**(alpha/2.D0)/Jeq
     end function psiQ_FF
 
-    function integral_psiQ_FF(Q, b, Q0, Jeq)
+    function integral_psiQ_FF(Q, alpha, Q0, Jeq)
         !Simple cumulative trapezoidal integral of psiQ_FF at
         !points specified in Q
         implicit none
         real*8, dimension(:), intent(in) :: Q
-        real*8, intent(in) :: b, Q0, Jeq
+        real*8, intent(in) :: alpha, Q0, Jeq
         real*8, dimension(size(Q)) :: integral_psiQ_FF
         integer :: k
 
         integral_psiQ_FF(1) = 0.D0
         do k=2,size(Q)
             integral_psiQ_FF(k) = integral_psiQ_FF(k-1) + &
-                                  (psiQ_FF(Q(k-1),b,Q0, Jeq) + psiQ_FF(Q(k),b,Q0, Jeq))*(Q(k)-Q(k-1))/2.D0
+                                  (psiQ_FF(Q(k-1),alpha,Q0, Jeq) + psiQ_FF(Q(k),alpha,Q0, Jeq))*(Q(k)-Q(k-1))/2.D0
         end do
         !Trapezoidal rule is far from perfect, but we must have int from 0 to 1
     !    integral_psiQ_FF = integral_psiQ_FF/integral_psiQ_FF(size(Q))
 
     end function integral_psiQ_FF
 
-    function generate_Ql_eq_FF(N, b, Q0, seed, Nsteps)
+    function generate_Ql_eq_FF(N, alpha, Q0, seed, Nsteps)
         implicit none
-        real*8, intent(in) :: b, Q0
+        real*8, intent(in) :: alpha, Q0
         integer*8, intent(in) :: N, Nsteps
         integer*8, intent(inout) :: seed
         integer :: k
@@ -52,15 +43,15 @@ module Generate_Initial_Conditions
         real*8, dimension(Nsteps) :: Q, intpsiQ
         real*8 :: width, Jeq
 
-        !Generate a Q vector between Q0-sqrt(b) and Q0+sqrt(b) with Nsteps steps
+        !Generate a Q vector between Q0-sqrt(alpha) and Q0+sqrt(alpha) with Nsteps steps
         !Round off a little at the end to prevent singularities
         Q = 0.D0
-        if (Q0-sqrt(b).le.0.D0) then
-            width = (Q0+sqrt(b))/(Nsteps-1)
+        if (Q0-sqrt(alpha).le.0.D0) then
+            width = (Q0+sqrt(alpha))/(Nsteps-1)
             Q(1) = 0.D0
         else
-            width = 2.D0*sqrt(b)/(Nsteps-1)
-            Q(1) = Q0-sqrt(b)
+            width = 2.D0*sqrt(alpha)/(Nsteps-1)
+            Q(1) = Q0-sqrt(alpha)
         end if
         do k=2,Nsteps
             Q(k) = Q(k-1) + width
@@ -70,10 +61,10 @@ module Generate_Initial_Conditions
 
     !   determine normalisation constant
     !   Is this needed? It's normalised anyway... TODO
-        intpsiQ = integral_psiQ_FF(Q,b,Q0, 1.D0)
+        intpsiQ = integral_psiQ_FF(Q,alpha,Q0, 1.D0)
         Jeq = intpsiQ(size(Q))
     !   perform actual integration and normalise to 1
-        intpsiQ = integral_psiQ_FF(Q,b,Q0,Jeq)
+        intpsiQ = integral_psiQ_FF(Q,alpha,Q0,Jeq)
         Jeq = intpsiQ(size(Q))
         intpsiQ = intpsiQ/Jeq
 
@@ -102,9 +93,9 @@ module Generate_Initial_Conditions
 
     end function inverse_lin_interp
 
-    function generate_Q_FF(Q0,b, N, seed, Nsteps)
+    function generate_Q_FF(Q0,alpha, N, seed, Nsteps)
         implicit none
-        real*8, intent(in) :: Q0, b
+        real*8, intent(in) :: Q0, alpha
         integer*8, intent(inout) :: seed
         integer*8, intent(in) :: N, Nsteps
         real*8, dimension(3,N) :: generate_Q_FF
@@ -112,7 +103,7 @@ module Generate_Initial_Conditions
 
         generate_Q_FF(:,:) = spherical_unit_vectors(N, seed)
 
-        Ql(:) = generate_Ql_eq_FF(N, b, Q0, seed, Nsteps)
+        Ql(:) = generate_Ql_eq_FF(N, alpha, Q0, seed, Nsteps)
 
         generate_Q_FF(1,:) = generate_Q_FF(1,:)*Ql
         generate_Q_FF(2,:) = generate_Q_FF(2,:)*Ql
