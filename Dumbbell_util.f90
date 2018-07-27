@@ -58,10 +58,11 @@ module Dumbbell_util
 
     function betai(a,b,x)
         !From numerical recipes, uses betacf
+        !Outputs the incomplete (and regularised) beta function
         implicit none
         real*8, intent(in) :: a, b, x
         real*8 :: betai
-        real*8 :: bt, betacf
+        real*8 :: bt
 
         if(x.eq.0.D0.or.x.eq.1.D0) then
             bt = 0.D0
@@ -83,9 +84,9 @@ module Dumbbell_util
     function betacf(a,b,x)
         real*8, intent(in) :: a, b, x
         real*8 :: betacf
-        parameter, integer*8 :: maxit = 100
-        parameter, real*8 :: eps = 3.D-7
-        parameter, real*8 :: fpmin = 1.D-30
+        integer*8, parameter :: maxit = 100
+        real*8, parameter :: eps = 3.D-7
+        real*8, parameter :: fpmin = 1.D-30
         integer*8 :: m, m2
         real*8 :: aa, c, d, del, h, qab, qam, qap
 
@@ -94,7 +95,7 @@ module Dumbbell_util
         qam = a-1.D0
         c = 1.D0
         d = 1.D0 - qab*x/qap
-        if (abs(d).lt.fpmin) d = fpmin
+        if (abs(d).lt.fpmin) d=fpmin
         d = 1.D0/d
         h = d
         do m = 1,maxit
@@ -102,17 +103,17 @@ module Dumbbell_util
             ! step one of the recurrence
             aa = m*(b-m)*x/((qam+m2)*(a+m2))
             d = 1.D0+aa*d
-            if (abs(d).lt.fpmin) d = fpmin
-            c = 1.D0_aa.c
-            if (abs(c).lt.fpmin) c = fpmin
+            if (abs(d).lt.fpmin) d=fpmin
+            c = 1.D0+aa/c
+            if (abs(c).lt.fpmin) c=fpmin
             d = 1.D0/d
             h = h*d*c
             ! step two (odd step) of recurrence
             aa = -(a+m)*(qab+m)*x/((a+m2)*(qap+m2))
             d = 1.D0+aa*d
-            if (abs(d).lt.fpmin) d = fpmin
-            c = 1.D0_aa.c
-            if (abs(c).lt.fpmin) c = fpmin
+            if (abs(d).lt.fpmin) d=fpmin
+            c = 1.D0+aa/c
+            if (abs(c).lt.fpmin) c=fpmin
             d = 1.D0/d
 
             del = d*c

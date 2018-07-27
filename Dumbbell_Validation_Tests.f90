@@ -21,13 +21,14 @@ Program Dumbbell_Validation_tests
 
     subroutine Validation_tests()
         implicit none
-        integer*8 :: val_count_fail, val_count_suc, val_count_total
+        integer :: k, n
+        real*8 :: k_r, n_r
+        real*8 :: prob
         ! Validation tests pass if results are within two
         ! standard deviations of target result,
         ! i.e. a 95% confidence level
-        val_count_fail = 0
-        val_count_suc = 0
-        val_count_total = 0
+        k = 0
+        n = 0
         print *, "We expect about 5% of tests to fail by chance, or ~1/20"
         print *, ""
         call test_eq_hookean_semimp(0.01D0, 1000, 10000)
@@ -38,11 +39,19 @@ Program Dumbbell_Validation_tests
         call test_semimp_euler_equal(0.01D0, 100, 10000)
         call test_FENE_HI_shear_semimp_vs_Kailash_code(0.01D0, 1000, 10000)
 
-        !p-test on likelihood
-        call getFailedCount(val_count_fail)
-        call getTotalCount(val_count_total)
-        val_count_suc = val_count_total - val_count_fail
+        !p-test on likelihood of k or more 'failures' in n trials
+        call get_failed_count(k)
+        call get_total_count(n)
+        k_r = k
+        n_r = n
+        !Incomplete beta function gives cumulative binomial probability
+        !https://en.wikipedia.org/wiki/Binomial_distribution#Cumulative_distribution_function
+        prob = 1.D0 - betai(n_r-k_r+1.D0, k_r, 0.95D0)
 
+        print "(A, F5.1, A, I2, A, I3, A)", &
+         "There is a ", prob*100.D0, "% chance of getting", k, " or more failures in", &
+          n, " tests, assuming the underlying failure probability is 5% (2 sigma)"
+        print *, ""
 
     end subroutine
 
