@@ -2,7 +2,7 @@
 program General_Dumbbell
     use Integrate
     use Generate_Initial_Conditions
-    use Random_Numbers
+    use Dumbbell_util
     use omp_lib
     implicit none
 
@@ -11,7 +11,7 @@ program General_Dumbbell
     real*8 :: sr, b, h, a, Q0, Nrelax_times, dt, Ql, Ql2, F(3), dW(3), Qtemp(3), Bq, Bs, delX(3)
     real*8 :: time1, time2, B_eta, Bpsi, Bpsi2, output_delay
     real*8 :: Qavg, Vqavg, S, Serr, Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2
-    real*8, dimension(3,3) :: k, delT, tau
+    real*8, dimension(3,3) :: k, tau
     !large arrays must be declared allocatable so they go into heap, otherwise
     !OpenMP threads run out of memory
     real*8, dimension(:, :), allocatable :: Q, Q_eq_VR
@@ -24,6 +24,12 @@ program General_Dumbbell
     open(unit=30, file='timestepdata.inp')
     open(unit=32, file='options.inp')
     open(unit=25, file='Q_dist_output.dat')
+
+    open(unit=20, file='Ql.dat')
+    open(unit=21, file='S.dat')
+    open(unit=22, file='eta.dat')
+    open(unit=23, file='psi.dat')
+    open(unit=24, file='psi2.dat')
 
     read (32, *) VR_opt, dist_opt
     read (31, *) sr, b, h, Q0
@@ -56,7 +62,7 @@ program General_Dumbbell
         !Reduce final input for faster computation of equilibrium dist
         Q(:,:) = generate_Q_FF(Q0, b, Ntraj, seed, 10000)
 
-        call initialise_output_files_timestep('Ql.dat', 'S.dat', 'eta.dat', 'psi.dat', 'psi2.dat')
+        call initialise_output_files_timestep()
 
         !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, VR_opt), &
         !$OMP& SHARED(Qavg, Vqavg, S, Serr, Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2)
@@ -68,11 +74,11 @@ program General_Dumbbell
                 !$OMP DO schedule(dynamic, 100)
                 do i=1,Ntraj
                     dW = Wiener_step(seed, dt)
-                    Q(:,i) =  step(Q(:,i), k, dt, Q0, delT, b, a, dW)
+                    Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW)
                 end do
                 !$OMP END DO
-                if (steps.eq.1.or.(steps*dt).eq.output_delay.or.steps.eq.NTimeSteps) then
-                    call write_data_to_files_no_VR('Ql.dat', 'S.dat', 'eta.dat', 'psi.dat', 'psi2.dat')
+                if (steps.eq.1.or.(mod(steps,nint(output_delay/dt)).eq.0).or.steps.eq.NTimeSteps) then
+                    call write_data_to_files_no_VR()
                 end if
             end do
 
@@ -88,13 +94,13 @@ program General_Dumbbell
                 do i=1,Ntraj
                     dW = Wiener_step(seed, dt)
                     k(1,2) = sr
-                    Q(:,i) =  step(Q(:,i), k, dt, Q0, delT, b, a, dW)
+                    Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW)
                     k(1,2) = 0.D0
-                    Q_eq_VR(:,i) = step(Q_eq_VR(:,i), k, dt, Q0, delT, b, a, dW)
+                    Q_eq_VR(:,i) = step(Q_eq_VR(:,i), k, dt, Q0, b, a, dW)
                 end do
                 !$OMP END DO
-                if (steps.eq.1.or.(steps*dt).eq.output_delay.or.steps.eq.NTimeSteps) then
-                    call write_data_to_files_with_VR('Ql.dat', 'S.dat', 'eta.dat', 'psi.dat', 'psi2.dat')
+                if (steps.eq.1.or.(mod(steps,nint(output_delay/dt)).eq.0).or.steps.eq.NTimeSteps) then
+                    call write_data_to_files_with_VR()
                 end if
             end do
 
@@ -103,14 +109,6 @@ program General_Dumbbell
         end if
 
         !$OMP END PARALLEL
-
-        if (VR_opt.eq.0) then
-            call measure_no_VR()
-        elseif (VR_opt.eq.1) then
-            call measure_with_VR()
-        else
-            print *, "Variance Reduction option not set, place in options.inp file"
-        end if
 
         if (dist_opt.eq.1) then
             25 format(2(E12.5,4X), E12.5)
@@ -123,6 +121,11 @@ program General_Dumbbell
     end do looptimesteps
 
     !close(unit=21)
+    close(unit=20)
+    close(unit=21)
+    close(unit=22)
+    close(unit=23)
+    close(unit=24)
     close(unit=25)
 
     deallocate(Q)
@@ -132,17 +135,10 @@ program General_Dumbbell
 
     contains
 
-    subroutine write_data_to_files_no_VR(Ql_fname, S_fname, eta_fname, psi_fname, psi2_fname)
+    subroutine write_data_to_files_no_VR()
         implicit none
-        character(len=*), intent(in) :: Ql_fname, S_fname, eta_fname, psi_fname, psi2_fname
         call measure_no_VR
 
-        open(unit=20, file=Ql_fname, position='append')
-        open(unit=21, file=S_fname, position='append')
-        open(unit=22, file=eta_fname, position='append')
-        open(unit=23, file=psi_fname, position='append')
-        open(unit=24, file=psi2_fname, position='append')
-
         121 format(F7.2, 2X, E15.8, 2X, E15.8)
         !$OMP single
         write(20,121) steps*dt, Qavg, Vqavg
@@ -152,26 +148,12 @@ program General_Dumbbell
         write(24,121) steps*dt, Apsi2, Vpsi2
         !$OMP end single
 
-        close(unit=20)
-        close(unit=21)
-        close(unit=22)
-        close(unit=23)
-        close(unit=24)
-
-
     end subroutine
 
-    subroutine write_data_to_files_with_VR(Ql_fname, S_fname, eta_fname, psi_fname, psi2_fname)
+    subroutine write_data_to_files_with_VR()
         implicit none
-        character(len=*), intent(in) :: Ql_fname, S_fname, eta_fname, psi_fname, psi2_fname
         call measure_with_VR
 
-        open(unit=20, file=Ql_fname, position='append')
-        open(unit=21, file=S_fname, position='append')
-        open(unit=22, file=eta_fname, position='append')
-        open(unit=23, file=psi_fname, position='append')
-        open(unit=24, file=psi2_fname, position='append')
-
         121 format(F7.2, 2X, E15.8, 2X, E15.8)
         !$OMP single
         write(20,121) steps*dt, Qavg, Vqavg
@@ -181,33 +163,16 @@ program General_Dumbbell
         write(24,121) steps*dt, Apsi2, Vpsi2
         !$OMP end single
 
-        close(unit=20)
-        close(unit=21)
-        close(unit=22)
-        close(unit=23)
-        close(unit=24)
     end subroutine
 
-    subroutine initialise_output_files_timestep(Ql_fname, S_fname, eta_fname, psi_fname, psi2_fname)
+    subroutine initialise_output_files_timestep()
         implicit none
-        character(len=*), intent(in) :: Ql_fname, S_fname, eta_fname, psi_fname, psi2_fname
-        open(unit=20, file=Ql_fname, position='append')
-        open(unit=21, file=S_fname, position='append')
-        open(unit=22, file=eta_fname, position='append')
-        open(unit=23, file=psi_fname, position='append')
-        open(unit=24, file=psi2_fname, position='append')
 
         write(20,*) "Timestep width is: ", dt
         write(21,*) "Timestep width is: ", dt
         write(22,*) "Timestep width is: ", dt
         write(23,*) "Timestep width is: ", dt
         write(24,*) "Timestep width is: ", dt
-
-        close(unit=20)
-        close(unit=21)
-        close(unit=22)
-        close(unit=23)
-        close(unit=24)
 
     end subroutine
 
@@ -221,6 +186,10 @@ program General_Dumbbell
         Aeta = 0.D0; Apsi = 0.D0; Apsi2 = 0.D0
         Veta = 0.D0; Vpsi = 0.D0; Vpsi2 = 0.D0
         Qavg = 0.D0; Vqavg = 0.D0; S = 0.D0; Serr = 0.D0
+
+        Aeta_tmp = 0.D0; Apsi_tmp = 0.D0; Apsi2_tmp = 0.D0
+        Veta_tmp = 0.D0; Vpsi_tmp = 0.D0; Vpsi2_tmp = 0.D0
+        Qavg_tmp = 0.D0; Vqavg_tmp = 0.D0; S_tmp = 0.D0; Serr_tmp = 0.D0
 
         !$OMP DO
         do i=1,Ntraj
@@ -283,6 +252,8 @@ program General_Dumbbell
         !$OMP atomic
         Serr = Serr + Serr_tmp
 
+        !$OMP barrier
+
         !$OMP single
         Aeta = Aeta/(Ntraj*sr)
         Veta = Veta/(Ntraj*sr**2)
@@ -312,11 +283,16 @@ program General_Dumbbell
         real*8 :: Qavg_tmp, Vqavg_tmp, S_tmp, Serr_tmp
         real*8 :: Aeta_tmp, Veta_tmp, Apsi_tmp, Vpsi_tmp, Apsi2_tmp, Vpsi2_tmp
 
-        tau = 0.D0
         ! These variables are all global and shared between threads
         Aeta = 0.D0; Apsi = 0.D0; Apsi2 = 0.D0
         Veta = 0.D0; Vpsi = 0.D0; Vpsi2 = 0.D0
         Qavg = 0.D0; Vqavg = 0.D0; S = 0.D0; Serr = 0.D0
+
+        !These variables SHOULD(!) be private
+        tau = 0.D0
+        Aeta_tmp = 0.D0; Apsi_tmp = 0.D0; Apsi2_tmp = 0.D0
+        Veta_tmp = 0.D0; Vpsi_tmp = 0.D0; Vpsi2_tmp = 0.D0
+        Qavg_tmp = 0.D0; Vqavg_tmp = 0.D0; S_tmp = 0.D0; Serr_tmp = 0.D0
 
         !$OMP DO
         do i=1,Ntraj
@@ -364,6 +340,8 @@ program General_Dumbbell
         !$OMP atomic
         Serr = Serr + Serr_tmp
 
+        !$OMP barrier
+
         !$OMP single
         Aeta = Aeta/(Ntraj*sr)
         Veta = Veta/(Ntraj*sr**2)
@@ -386,50 +364,49 @@ program General_Dumbbell
         Serr = sqrt((Serr - S**2)/(Ntraj-1))
         !$OMP end single
 
-
     end subroutine
 
-    subroutine Write_data()
-        implicit none
-        open(unit=20, file='Ql.dat')
-        open(unit=21, file='S.dat')
-        open(unit=22, file='eta.dat')
-        open(unit=23, file='psi.dat')
-        open(unit=24, file='psi2.dat')
-
-        !10 format(F4.2,4X,F7.5,2X,F7.5,4X,F7.5,2X,F7.5,4X,F7.5,2X,F7.5,4X,F7.5,2X,F7.5,4X,F7.5,2X,F7.5)
-        10 format(F6.3,4X, 2(E12.5, 2X, E12.5, 4X))
-        write(*,*) 'dtw       Q             err             S             err'
-        do i = 1,Ndtwidths
-            write(*,10) timestepwidths(i), Qavg(i), Vqavg(i), S(i), Serr(i)
-        end do
-
-        12 format(F6.3,4X, 3(E12.5, 2X, E12.5, 4X))
-        write(*,*) 'dtw       eta           err             psi           err       psi2        err'
-        do i = 1,Ndtwidths
-            write(*,12) timestepwidths(i), Aeta(i), Veta(i), Apsi(i), Vpsi(i), Apsi2(i), Vpsi2(i)
-        end do
-
-
-        11 format(F6.3,4X, E15.8, 2X, E15.8, 4X)
-        do i=20,24
-            write(i,*) 'timestepwidth    avg    err'
-        end do
-        do i = 1,Ndtwidths
-            write(20,11) timestepwidths(i), Qavg(i), Vqavg(i)
-            write(21,11) timestepwidths(i), S(i), Serr(i)
-            write(22,11) timestepwidths(i), Aeta(i), Veta(i)
-            write(23,11) timestepwidths(i), Apsi(i), Vpsi(i)
-            write(24,11) timestepwidths(i), Apsi2(i), Vpsi2(i)
-        end do
-
-        close(unit=20)
-        close(unit=21)
-        close(unit=22)
-        close(unit=23)
-        close(unit=24)
-
-    end subroutine
+!    subroutine Write_data()
+!        implicit none
+!        open(unit=20, file='Ql.dat')
+!        open(unit=21, file='S.dat')
+!        open(unit=22, file='eta.dat')
+!        open(unit=23, file='psi.dat')
+!        open(unit=24, file='psi2.dat')
+!
+!        !10 format(F4.2,4X,F7.5,2X,F7.5,4X,F7.5,2X,F7.5,4X,F7.5,2X,F7.5,4X,F7.5,2X,F7.5,4X,F7.5,2X,F7.5)
+!        10 format(F6.3,4X, 2(E12.5, 2X, E12.5, 4X))
+!        write(*,*) 'dtw       Q             err             S             err'
+!        do i = 1,Ndtwidths
+!            write(*,10) timestepwidths(i), Qavg(i), Vqavg(i), S(i), Serr(i)
+!        end do
+!
+!        12 format(F6.3,4X, 3(E12.5, 2X, E12.5, 4X))
+!        write(*,*) 'dtw       eta           err             psi           err       psi2        err'
+!        do i = 1,Ndtwidths
+!            write(*,12) timestepwidths(i), Aeta(i), Veta(i), Apsi(i), Vpsi(i), Apsi2(i), Vpsi2(i)
+!        end do
+!
+!
+!        11 format(F6.3,4X, E15.8, 2X, E15.8, 4X)
+!        do i=20,24
+!            write(i,*) 'timestepwidth    avg    err'
+!        end do
+!        do i = 1,Ndtwidths
+!            write(20,11) timestepwidths(i), Qavg(i), Vqavg(i)
+!            write(21,11) timestepwidths(i), S(i), Serr(i)
+!            write(22,11) timestepwidths(i), Aeta(i), Veta(i)
+!            write(23,11) timestepwidths(i), Apsi(i), Vpsi(i)
+!            write(24,11) timestepwidths(i), Apsi2(i), Vpsi2(i)
+!        end do
+!
+!        close(unit=20)
+!        close(unit=21)
+!        close(unit=22)
+!        close(unit=23)
+!        close(unit=24)
+!
+!    end subroutine
 
 end program
 
