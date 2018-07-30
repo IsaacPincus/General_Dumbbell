@@ -178,29 +178,4 @@ module Integrate
 
     end function find_roots
 
-    pure function dyadic_prod(vec1,vec2)
-        implicit none
-        real*8, dimension(3), intent(in) :: vec1, vec2
-        real*8, dimension(3,3) :: dyadic_prod
-        integer :: i, j
-
-        do i=1,3
-            do j=1,3
-                dyadic_prod(i,j) = vec1(i)*vec2(j)
-            end do
-        end do
-    end function dyadic_prod
-
-    pure function ten_vec_dot(tensor, vector)
-        implicit none
-        real*8, dimension(3,3), intent(in) :: tensor
-        real*8, dimension(3), intent(in) :: vector
-        real*8, dimension(3) :: ten_vec_dot
-        integer :: i
-
-        do i=1,3
-            ten_vec_dot(i) = dot_product(tensor(i,:), vector)
-        end do
-    end function ten_vec_dot
-
 end module

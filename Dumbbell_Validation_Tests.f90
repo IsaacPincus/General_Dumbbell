@@ -57,13 +57,11 @@ Program Dumbbell_Validation_tests
 
     subroutine test_eq_hookean_semimp(dt, Nsteps, Ntraj)
         implicit none
-
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time
-        real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, tau
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3)
+        type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -77,19 +75,12 @@ Program Dumbbell_Validation_tests
 
         k(:,:) = 0.D0
 
-        delX = (/1.D0, 0.D0, 0.D0/)
-
-        Qavg = 0.D0
-        Vqavg = 0.D0
-        S = 0.D0
-        Serr = 0.D0
-
         Q = generate_Q_FF(0.D0, 10000.D0, Ntraj, seed, 10000)
 
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
 
-        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q)
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var)
         !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
 
         do steps = 1,Nsteps
@@ -101,40 +92,23 @@ Program Dumbbell_Validation_tests
             !$OMP END DO
 
         end do
+
+        call measure_shear_no_VR(out_var, Q, 0.D0, 10000.D0, 0.D0, Ntraj)
+
         !$OMP END parallel
-
-        ! Measurement
-        do i = 1,Ntraj
-            Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
-            Ql = sqrt(Ql2)
-            Bs = dot_product(delX, Q(:,i))**2/Ql2
-
-            Qavg = Qavg + Ql2
-            Vqavg = Vqavg + Ql
-            S = S + 0.5D0*(3.D0*Bs - 1)
-            Serr = Serr + 0.25D0*(9.D0*Bs**2 - 6.D0*Bs + 1.D0)
-        end do
-
-        Qavg = sqrt(Qavg/Ntraj)
-        Vqavg = Vqavg/Ntraj
-        Vqavg = sqrt((Qavg**2 - Vqavg**2)/(Ntraj-1))
-
-        S = S/Ntraj
-        Serr = Serr/Ntraj
-        Serr = sqrt((Serr - S**2)/(Ntraj-1))
 
         call cpu_time(stop_time)
         !$ stop_time = omp_get_wtime()
         print *, "Run time:", &
                 stop_time - start_time, "seconds"
 
-        print *, "Q-sqrt(3) = ", (Qavg-sqrt(3.D0)), " +- ", Vqavg
-        print *, "S = ", S, " +- ", Serr
+        print *, "Q-sqrt(3) = ", (out_var%Qavg-sqrt(3.D0)), " +- ", out_var%Vqavg
+        print *, "S = ", out_var%S, " +- ", out_var%Serr
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(sqrt(3.D0), Qavg, Vqavg*2.D0, &
+        call assertEquals(sqrt(3.D0), out_var%Qavg, out_var%Vqavg*2.D0, &
                           "Qavg != sqrt(3) for sr=0 Hookean Dumbbell (semimp)")
-        call assertEquals(0.D0, S, Serr*2.D0, &
+        call assertEquals(0.D0, out_var%S, out_var%Serr*2.D0, &
                           "S != 0 for sr=0 Hookean Dumbbell (semimp)")
 
         deallocate(Q)
@@ -144,14 +118,11 @@ Program Dumbbell_Validation_tests
 
     subroutine test_Hookean_viscosity_semimp(dt, Nsteps, Ntraj)
         implicit none
-
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr
-        real*8 :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Beta, Bpsi, Bpsi2
-        real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, tau
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3)
+        type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -169,23 +140,12 @@ Program Dumbbell_Validation_tests
         k(1,2) = 1.D0
         k = sr*k
 
-        delX = (/1.D0, 0.D0, 0.D0/)
-
-        Aeta = 0.D0
-        Apsi = 0.D0
-        Apsi2 = 0.D0
-        Veta = 0.D0
-        Vpsi = 0.D0
-        Vpsi2 = 0.D0
-
-        tau = 0.D0
-
         Q = generate_Q_FF(0.D0, 10000.D0, Ntraj, seed, 10000)
 
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
 
-        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q)
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var)
         !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
 
         do steps = 1,Nsteps
@@ -195,52 +155,24 @@ Program Dumbbell_Validation_tests
                 Q(:,i) =  step(Q(:,i), k, dt, 0.D0, 10000.D0, 0.D0, dW)
             end do
             !$OMP END DO
-
         end do
+
+        call measure_shear_no_VR(out_var, Q, 0.D0, 10000.D0, sr, Ntraj)
+
         !$OMP END parallel
-
-        ! Measurement
-        do i = 1,Ntraj
-            Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
-            Ql = sqrt(Ql2)
-            F(:) = (Ql - 0.D0)/(1.0D0-(Ql-0.D0)**2/10000.D0)*Q(:,i)/Ql
-            tau(:,:) = dyadic_prod(Q(:,i), F)
-
-            Beta = tau(1,2)
-            Bpsi = (tau(1,1) - tau(2,2))
-            Bpsi2 = (tau(2,2) - tau(3,3))
-            Aeta = Aeta + Beta
-            Apsi = Apsi + Bpsi
-            Apsi2 = Apsi2 + Bpsi2
-            Veta = Veta + Beta**2
-            Vpsi = Vpsi + Bpsi**2
-            Vpsi2 = Vpsi2 + Bpsi2**2
-        end do
-
-        Aeta = Aeta/(Ntraj*sr)
-        Veta = Veta/(Ntraj*sr**2)
-        Veta = sqrt((Veta - Aeta**2)/(Ntraj-1))
-
-        Apsi = Apsi/(Ntraj*sr**2)
-        Vpsi = Vpsi/(Ntraj*sr**4)
-        Vpsi = sqrt((Vpsi - Apsi**2)/(Ntraj-1))
-
-        Apsi2 = Apsi2/(Ntraj*sr**2)
-        Vpsi2 = Vpsi2/(Ntraj*sr**4)
-        Vpsi2 = sqrt((Vpsi2 - Apsi2**2)/(Ntraj-1))
 
         call cpu_time(stop_time)
         !$ stop_time = omp_get_wtime()
         print *, "Run time:", &
                 stop_time - start_time, "seconds"
 
-        print *, "Aeta-0.63212 = ", (Aeta-0.63212D0), " +- ", Veta
-        print *, "Apsi-0.52848 = ", (Apsi-0.52848D0), " +- ", Vpsi
+        print *, "Aeta-0.63212 = ", (out_var%Aeta-0.63212D0), " +- ", out_var%Veta
+        print *, "Apsi-0.52848 = ", (out_var%Apsi-0.52848D0), " +- ", out_var%Vpsi
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(0.63212D0, Aeta, Veta*2.D0, &
+        call assertEquals(0.63212D0, out_var%Aeta, out_var%Veta*2.D0, &
                           "eta != 0.63212 for sr=1 Hookean Dumbbell (semimp)")
-        call assertEquals(0.52848D0, Apsi, Vpsi*2.D0, &
+        call assertEquals(0.52848D0, out_var%Apsi, out_var%Vpsi*2.D0, &
                           "psi_1 != 0.52848 for sr=1 Hookean Dumbbell (semimp)")
 
         deallocate(Q)
@@ -248,16 +180,12 @@ Program Dumbbell_Validation_tests
     end subroutine
 
     subroutine test_Hookean_psi2_with_HI_semimp(dt, Nsteps, Ntraj)
-
         implicit none
-
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, h, a
-        real*8 :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Beta, Bpsi, Bpsi2
-        real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, tau
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3), h, a
+        type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -278,23 +206,12 @@ Program Dumbbell_Validation_tests
         k(1,2) = 1.D0
         k = sr*k
 
-        delX = (/1.D0, 0.D0, 0.D0/)
-
-        Aeta = 0.D0
-        Apsi = 0.D0
-        Apsi2 = 0.D0
-        Veta = 0.D0
-        Vpsi = 0.D0
-        Vpsi2 = 0.D0
-
-        tau = 0.D0
-
         Q = generate_Q_FF(0.D0, 10000.D0, Ntraj, seed, 10000)
 
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
 
-        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q)
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var)
         !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
 
         do steps = 1,Nsteps
@@ -306,47 +223,20 @@ Program Dumbbell_Validation_tests
             !$OMP END DO
 
         end do
+
+        call measure_shear_no_VR(out_var, Q, 0.D0, 10000.D0, sr, Ntraj)
+
         !$OMP END parallel
-
-        ! Measurement
-        do i = 1,Ntraj
-            Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
-            Ql = sqrt(Ql2)
-            F(:) = (Ql - 0.D0)/(1.0D0-(Ql-0.D0)**2/10000.D0)*Q(:,i)/Ql
-            tau(:,:) = dyadic_prod(Q(:,i), F)
-
-            Beta = tau(1,2)
-            Bpsi = (tau(1,1) - tau(2,2))
-            Bpsi2 = (tau(2,2) - tau(3,3))
-            Aeta = Aeta + Beta
-            Apsi = Apsi + Bpsi
-            Apsi2 = Apsi2 + Bpsi2
-            Veta = Veta + Beta**2
-            Vpsi = Vpsi + Bpsi**2
-            Vpsi2 = Vpsi2 + Bpsi2**2
-        end do
-
-        Aeta = Aeta/(Ntraj*sr)
-        Veta = Veta/(Ntraj*sr**2)
-        Veta = sqrt((Veta - Aeta**2)/(Ntraj-1))
-
-        Apsi = Apsi/(Ntraj*sr**2)
-        Vpsi = Vpsi/(Ntraj*sr**4)
-        Vpsi = sqrt((Vpsi - Apsi**2)/(Ntraj-1))
-
-        Apsi2 = Apsi2/(Ntraj*sr**2)
-        Vpsi2 = Vpsi2/(Ntraj*sr**4)
-        Vpsi2 = sqrt((Vpsi2 - Apsi2**2)/(Ntraj-1))
 
         call cpu_time(stop_time)
         !$ stop_time = omp_get_wtime()
         print *, "Run time:", &
                 stop_time - start_time, "seconds"
 
-        print *, "Apsi2+0.01348 = ", (Apsi2+0.01348D0), " +- ", Vpsi2
+        print *, "Apsi2+0.01348 = ", (out_var%Apsi2+0.01348D0), " +- ", out_var%Vpsi2
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(-0.01348D0, Apsi2, Vpsi2*2.D0, &
+        call assertEquals(-0.01348D0, out_var%Apsi2, out_var%Vpsi2*2.D0, &
                           "psi_2 != -0.01348 for sr=1, hstar=0.15 Hookean Dumbbell (semimp)")
 
         deallocate(Q)
@@ -354,16 +244,12 @@ Program Dumbbell_Validation_tests
     end subroutine
 
     subroutine test_Hookean_psi2_with_HI_semimp_2nd_method(dt, Nsteps, Ntraj)
-
         implicit none
-
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, h, a
-        real*8 :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Beta, Bpsi, Bpsi2
-        real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, tau
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3), h, a
+        type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -384,23 +270,12 @@ Program Dumbbell_Validation_tests
         k(1,2) = 1.D0
         k = sr*k
 
-        delX = (/1.D0, 0.D0, 0.D0/)
-
-        Aeta = 0.D0
-        Apsi = 0.D0
-        Apsi2 = 0.D0
-        Veta = 0.D0
-        Vpsi = 0.D0
-        Vpsi2 = 0.D0
-
-        tau = 0.D0
-
         Q = generate_Q_FF(0.D0, 10000.D0, Ntraj, seed, 10000)
 
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
 
-        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q)
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var)
         !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
 
         do steps = 1,Nsteps
@@ -412,47 +287,20 @@ Program Dumbbell_Validation_tests
             !$OMP END DO
 
         end do
+
+        call measure_shear_no_VR(out_var, Q, 0.D0, 10000.D0, sr, Ntraj)
+
         !$OMP END parallel
-
-        ! Measurement
-        do i = 1,Ntraj
-            Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
-            Ql = sqrt(Ql2)
-            F(:) = (Ql - 0.D0)/(1.0D0-(Ql-0.D0)**2/10000.D0)*Q(:,i)/Ql
-            tau(:,:) = dyadic_prod(Q(:,i), F)
-
-            Beta = tau(1,2)
-            Bpsi = (tau(1,1) - tau(2,2))
-            Bpsi2 = (tau(2,2) - tau(3,3))
-            Aeta = Aeta + Beta
-            Apsi = Apsi + Bpsi
-            Apsi2 = Apsi2 + Bpsi2
-            Veta = Veta + Beta**2
-            Vpsi = Vpsi + Bpsi**2
-            Vpsi2 = Vpsi2 + Bpsi2**2
-        end do
-
-        Aeta = Aeta/(Ntraj*sr)
-        Veta = Veta/(Ntraj*sr**2)
-        Veta = sqrt((Veta - Aeta**2)/(Ntraj-1))
-
-        Apsi = Apsi/(Ntraj*sr**2)
-        Vpsi = Vpsi/(Ntraj*sr**4)
-        Vpsi = sqrt((Vpsi - Apsi**2)/(Ntraj-1))
-
-        Apsi2 = Apsi2/(Ntraj*sr**2)
-        Vpsi2 = Vpsi2/(Ntraj*sr**4)
-        Vpsi2 = sqrt((Vpsi2 - Apsi2**2)/(Ntraj-1))
 
         call cpu_time(stop_time)
         !$ stop_time = omp_get_wtime()
         print *, "Run time:", &
                 stop_time - start_time, "seconds"
 
-        print *, "Apsi2+0.01348 = ", (Apsi2+0.01348D0), " +- ", Vpsi2
+        print *, "Apsi2+0.01348 = ", (out_var%Apsi2+0.01348D0), " +- ", out_var%Vpsi2
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(-0.01348D0, Apsi2, Vpsi2*2.D0, &
+        call assertEquals(-0.01348D0, out_var%Apsi2, out_var%Vpsi2*2.D0, &
                           "psi_2 != -0.01348 for sr=1, hstar=0.15 Hookean Dumbbell (semimp)")
 
         deallocate(Q)
@@ -461,13 +309,11 @@ Program Dumbbell_Validation_tests
 
     subroutine test_eq_FENE_semimp(dt, Nsteps, Ntraj)
         implicit none
-
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time, b
-        real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, tau
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3), b
+        type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q
@@ -481,13 +327,6 @@ Program Dumbbell_Validation_tests
 
         k(:,:) = 0.D0
 
-        delX = (/1.D0, 0.D0, 0.D0/)
-
-        Qavg = 0.D0
-        Vqavg = 0.D0
-        S = 0.D0
-        Serr = 0.D0
-
         b = 10.D0
 
         Q = generate_Q_FF(0.D0, b, Ntraj, seed, 10000)
@@ -495,9 +334,8 @@ Program Dumbbell_Validation_tests
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
 
-        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q)
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var)
         !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
-
         do steps = 1,Nsteps
             !$OMP DO
             do i = 1,Ntraj
@@ -505,42 +343,22 @@ Program Dumbbell_Validation_tests
                 Q(:,i) =  step(Q(:,i), k, dt, 0.D0, b, 0.D0, dW)
             end do
             !$OMP END DO
-
         end do
+        call measure_shear_no_VR(out_var, Q, 0.D0, b, 0.D0, Ntraj)
         !$OMP END parallel
-
-        ! Measurement
-        do i = 1,Ntraj
-            Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
-            Ql = sqrt(Ql2)
-            Bs = dot_product(delX, Q(:,i))**2/Ql2
-
-            Qavg = Qavg + Ql2
-            Vqavg = Vqavg + Ql
-            S = S + 0.5D0*(3.D0*Bs - 1)
-            Serr = Serr + 0.25D0*(9.D0*Bs**2 - 6.D0*Bs + 1.D0)
-        end do
-
-        Qavg = sqrt(Qavg/Ntraj)
-        Vqavg = Vqavg/Ntraj
-        Vqavg = sqrt((Qavg**2 - Vqavg**2)/(Ntraj-1))
-
-        S = S/Ntraj
-        Serr = Serr/Ntraj
-        Serr = sqrt((Serr - S**2)/(Ntraj-1))
 
         call cpu_time(stop_time)
         !$ stop_time = omp_get_wtime()
         print *, "Run time:", &
                 stop_time - start_time, "seconds"
 
-        print *, "Q-(3*b)/(b+5) = ", (Qavg-sqrt(3*b/(b+5))), " +- ", Vqavg
-        print *, "S = ", S, " +- ", Serr
+        print *, "Q-(3*b)/(b+5) = ", (out_var%Qavg-sqrt(3*b/(b+5))), " +- ", out_var%Vqavg
+        print *, "S = ", out_var%S, " +- ", out_var%Serr
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(sqrt(3*b/(b+5)), Qavg, Vqavg*2.D0, &
+        call assertEquals(sqrt(3*b/(b+5)), out_var%Qavg, out_var%Vqavg*2.D0, &
                           "Qavg != sqrt(3*b/(b+5)) for sr=0, b=10 FENE Dumbbell (semimp)")
-        call assertEquals(0.D0, S, Serr*2.D0, &
+        call assertEquals(0.D0, out_var%S, out_var%Serr*2.D0, &
                           "S != 0 for sr=0, b=10 FENE Dumbbell (semimp)")
 
         print *, ""
@@ -553,9 +371,8 @@ Program Dumbbell_Validation_tests
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
 
-        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q)
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var)
         !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
-
         do steps = 1,Nsteps
             !$OMP DO
             do i = 1,Ntraj
@@ -563,42 +380,22 @@ Program Dumbbell_Validation_tests
                 Q(:,i) =  step(Q(:,i), k, dt, 0.D0, b, 0.D0, dW)
             end do
             !$OMP END DO
-
         end do
+        call measure_shear_no_VR(out_var, Q, 0.D0, b, 0.D0, Ntraj)
         !$OMP END parallel
-
-        ! Measurement
-        do i = 1,Ntraj
-            Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
-            Ql = sqrt(Ql2)
-            Bs = dot_product(delX, Q(:,i))**2/Ql2
-
-            Qavg = Qavg + Ql2
-            Vqavg = Vqavg + Ql
-            S = S + 0.5D0*(3.D0*Bs - 1)
-            Serr = Serr + 0.25D0*(9.D0*Bs**2 - 6.D0*Bs + 1.D0)
-        end do
-
-        Qavg = sqrt(Qavg/Ntraj)
-        Vqavg = Vqavg/Ntraj
-        Vqavg = sqrt((Qavg**2 - Vqavg**2)/(Ntraj-1))
-
-        S = S/Ntraj
-        Serr = Serr/Ntraj
-        Serr = sqrt((Serr - S**2)/(Ntraj-1))
 
         call cpu_time(stop_time)
         !$ stop_time = omp_get_wtime()
         print *, "Run time:", &
                 stop_time - start_time, "seconds"
 
-        print *, "Q-(3*b)/(b+5) = ", (Qavg-sqrt(3*b/(b+5))), " +- ", Vqavg
-        print *, "S = ", S, " +- ", Serr
+        print *, "Q-(3*b)/(b+5) = ", (out_var%Qavg-sqrt(3*b/(b+5))), " +- ", out_var%Vqavg
+        print *, "S = ", out_var%S, " +- ", out_var%Serr
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(sqrt(3*b/(b+5)), Qavg, Vqavg*2.D0, &
+        call assertEquals(sqrt(3*b/(b+5)), out_var%Qavg, out_var%Vqavg*2.D0, &
                           "Qavg != sqrt(3*b/(b+5)) for sr=0, b=50 FENE Dumbbell (semimp)")
-        call assertEquals(0.D0, S, Serr*2.D0, &
+        call assertEquals(0.D0, out_var%S, out_var%Serr*2.D0, &
                           "S != 0 for sr=0, b=50 FENE Dumbbell (semimp)")
 
         deallocate(Q)
@@ -608,14 +405,11 @@ Program Dumbbell_Validation_tests
 
     subroutine test_semimp_euler_equal(dt, Nsteps, Ntraj)
         implicit none
-
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, a, h, Beta, Bpsi, Bpsi2
-        real*8, dimension(2) :: Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2
-        real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, tau
+        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3), h, a
+        type(measured_variables) Vsemimp, Veuler
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q_semimp, Q_euler
@@ -636,24 +430,13 @@ Program Dumbbell_Validation_tests
         h = 0.15D0
         a = sqrt(PI)*h
 
-        delX = (/1.D0, 0.D0, 0.D0/)
-
-        Aeta = 0.D0
-        Apsi = 0.D0
-        Apsi2 = 0.D0
-        Veta = 0.D0
-        Vpsi = 0.D0
-        Vpsi2 = 0.D0
-
-        tau = 0.D0
-
         Q_semimp = generate_Q_FF(0.D0, 10000.D0, Ntraj, seed, 10000)
         Q_euler = Q_semimp
 
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
 
-        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q_euler, Q_semimp)
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q_euler, Q_semimp, Veuler, Vsemimp)
         !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
 
         do steps = 1,Nsteps
@@ -667,68 +450,28 @@ Program Dumbbell_Validation_tests
             !$OMP END DO
 
         end do
+        call measure_shear_no_VR(Veuler, Q_euler, 0.D0, 10000.D0, sr, Ntraj)
+        call measure_shear_no_VR(Vsemimp, Q_semimp, 0.D0, 10000.D0, sr, Ntraj)
         !$OMP END parallel
-
-        ! Measurement
-        do i = 1,Ntraj
-            Ql2 = Q_semimp(1,i)**2 + Q_semimp(2,i)**2 + Q_semimp(3,i)**2
-            Ql = sqrt(Ql2)
-            F(:) = (Ql - 0.D0)/(1.0D0-(Ql-0.D0)**2/10000.D0)*Q_semimp(:,i)/Ql
-            tau(:,:) = dyadic_prod(Q_semimp(:,i), F)
-
-            Beta = tau(1,2)
-            Bpsi = (tau(1,1) - tau(2,2))
-            Bpsi2 = (tau(2,2) - tau(3,3))
-            Aeta(1) = Aeta(1) + Beta
-            Apsi(1) = Apsi(1) + Bpsi
-            Apsi2(1) = Apsi2(1) + Bpsi2
-            Veta(1) = Veta(1) + Beta**2
-            Vpsi(1) = Vpsi(1) + Bpsi**2
-            Vpsi2(1) = Vpsi2(1) + Bpsi2**2
-
-            Ql2 = Q_euler(1,i)**2 + Q_euler(2,i)**2 + Q_euler(3,i)**2
-            Ql = sqrt(Ql2)
-            F(:) = (Ql - 0.D0)/(1.0D0-(Ql-0.D0)**2/10000.D0)*Q_euler(:,i)/Ql
-            tau(:,:) = dyadic_prod(Q_euler(:,i), F)
-
-            Beta = tau(1,2)
-            Bpsi = (tau(1,1) - tau(2,2))
-            Bpsi2 = (tau(2,2) - tau(3,3))
-            Aeta(2) = Aeta(2) + Beta
-            Apsi(2) = Apsi(2) + Bpsi
-            Apsi2(2) = Apsi2(2) + Bpsi2
-            Veta(2) = Veta(2) + Beta**2
-            Vpsi(2) = Vpsi(2) + Bpsi**2
-            Vpsi2(2) = Vpsi2(2) + Bpsi2**2
-        end do
-
-        Aeta = Aeta/(Ntraj*sr)
-        Veta = Veta/(Ntraj*sr**2)
-        Veta = sqrt((Veta - Aeta**2)/(Ntraj-1))
-
-        Apsi = Apsi/(Ntraj*sr**2)
-        Vpsi = Vpsi/(Ntraj*sr**4)
-        Vpsi = sqrt((Vpsi - Apsi**2)/(Ntraj-1))
-
-        Apsi2 = Apsi2/(Ntraj*sr**2)
-        Vpsi2 = Vpsi2/(Ntraj*sr**4)
-        Vpsi2 = sqrt((Vpsi2 - Apsi2**2)/(Ntraj-1))
 
         call cpu_time(stop_time)
         !$ stop_time = omp_get_wtime()
         print *, "Run time:", &
                 stop_time - start_time, "seconds"
 
-        print *, "Aeta_semimp-Aeta_euler = ", (Aeta(2) - Aeta(1)), " +- ", (Veta(2) + Veta(1))
-        print *, "Apsi_semimp-Apsi_euler = ", (Apsi(2) - Apsi(1)), " +- ", (Vpsi(2) + Vpsi(1))
-        print *, "Apsi2_semimp-Apsi2_euler = ", (Apsi2(2) - Apsi2(1)), " +- ", (Vpsi2(2) + Vpsi2(1))
+        print *, "Aeta_semimp-Aeta_euler = ", (Vsemimp%Aeta - Veuler%Aeta), &
+                                    " +- ", (Vsemimp%Veta + Veuler%Veta)
+        print *, "Apsi_semimp-Apsi_euler = ", (Vsemimp%Apsi - Veuler%Apsi), &
+                                    " +- ", (Vsemimp%Vpsi + Veuler%Vpsi)
+        print *, "Apsi2_semimp-Apsi2_euler = ", (Vsemimp%Apsi2 - Veuler%Apsi2), &
+                                    " +- ", (Vsemimp%Vpsi2 + Veuler%Vpsi2)
 
         !Check that both Qavg and S are within acceptable range
-        call assertEquals(Aeta(1), Aeta(2), 2*sqrt(Veta(2)**2 + Veta(1)**2), &
+        call assertEquals(Veuler%Aeta, Vsemimp%Aeta, 2*sqrt(Vsemimp%Veta**2 + Veuler%Veta**2), &
                           "Aeta_semimp != Aeta_euler, h*=0.15, sr=1")
-        call assertEquals(Apsi(1), Apsi(2), 2*sqrt(Vpsi(2)**2 + Vpsi(1)**2), &
+        call assertEquals(Veuler%Apsi, Vsemimp%Apsi, 2*sqrt(Vsemimp%Vpsi**2 + Veuler%Vpsi**2), &
                           "Apsi_semimp != Apsi_euler, h*=0.15, sr=1")
-        call assertEquals(Apsi2(1), Apsi2(2), 2*sqrt(Vpsi2(2)**2 + Vpsi2(1)**2), &
+        call assertEquals(Veuler%Apsi2, Vsemimp%Apsi2, 2*sqrt(Vsemimp%Vpsi2**2 + Veuler%Vpsi2**2), &
                           "Apsi2_semimp != Apsi2_euler, h*=0.15, sr=1")
 
         deallocate(Q_euler, Q_semimp)
@@ -737,15 +480,14 @@ Program Dumbbell_Validation_tests
 
     subroutine test_FENE_HI_shear_semimp_vs_Kailash_code(dt, Nsteps, Ntraj)
         implicit none
-
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
-        integer*8 :: steps, time(1:8), seed, i, shear_steps
-        real*8 :: Ql, Ql2, Bq, Bs, Qavg, Vqavg, S, Serr, start_time, stop_time, b, sr_vals(5), h, a, sr, Q0
-        real*8 :: Aeta(5), Veta(5), Apsi(5), Vpsi(5), Beta, Bpsi
-        real*8 :: K_Aeta(5), K_Veta(5), K_Apsi(5), K_Vpsi(5)
-        real*8, dimension(3) :: F, dW, Qtemp, delX
-        real*8, dimension(3,3) :: k, tau
+        integer*8 :: steps, time(1:8), seed, i, s
+        real*8 :: start_time, stop_time, b, sr_vals(5), h, a, sr, Q0
+        type(measured_variables) out_var(5)
+        real*8, dimension(3) :: dW
+        real*8, dimension(3,3) :: k
+        real*8, dimension(5) :: K_Aeta, K_Apsi, K_Veta, K_Vpsi
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
         real*8, dimension(:, :), allocatable :: Q_eq_VR, Q
@@ -758,17 +500,6 @@ Program Dumbbell_Validation_tests
         allocate(Q(3,1:Ntraj), Q_eq_VR(3,1:Ntraj))
 
         k(:,:) = 0.D0
-
-        delX = (/1.D0, 0.D0, 0.D0/)
-
-        Qavg = 0.D0
-        Vqavg = 0.D0
-        S = 0.D0
-        Serr = 0.D0
-        Aeta = 0.D0
-        Apsi = 0.D0
-        Veta = 0.D0
-        Vpsi = 0.D0
 
         sr_vals = (/0.03D0, 0.1D0, 1.D0, 45.D0, 100.D0/)
 
@@ -783,13 +514,12 @@ Program Dumbbell_Validation_tests
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
 
-
-        do shear_steps = 1,size(sr_vals)
-            sr = sr_vals(shear_steps)
+        do s = 1,size(sr_vals)
+            sr = sr_vals(s)
             Q = generate_Q_FF(0.D0, b, Ntraj, seed, 10000)
             Q_eq_VR = Q
 
-            !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR)
+            !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, out_var)
             !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
             do steps = 1,Nsteps
                 !$OMP DO
@@ -803,71 +533,34 @@ Program Dumbbell_Validation_tests
                 !$OMP END DO
 
             end do
+            ! Measurement
+            call measure_shear_with_VR(out_var(s), Q, Q_eq_VR, Q0, b, sr, Ntraj)
             !$OMP END parallel
 
-            ! Measurement
-            do i = 1,Ntraj
-                Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
-                Ql = sqrt(Ql2)
-                F(:) = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/b)*Q(:,i)/Ql
-                tau(:,:) = dyadic_prod(Q(:,i), F)
-
-                Beta = tau(1,2)
-                Bpsi = (tau(1,1) - tau(2,2))
-
-                Ql2 = Q_eq_VR(1,i)**2 + Q_eq_VR(2,i)**2 + Q_eq_VR(3,i)**2
-                Ql = sqrt(Ql2)
-                F(:) = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/b)*Q_eq_VR(:,i)/Ql
-                tau(:,:) = dyadic_prod(Q_eq_VR(:,i), F)
-
-                Beta = Beta - tau(1,2)
-                Bpsi = Bpsi - (tau(1,1) - tau(2,2))
-                Aeta(shear_steps) = Aeta(shear_steps) + Beta
-                Apsi(shear_steps) = Apsi(shear_steps) + Bpsi
-                Veta(shear_steps) = Veta(shear_steps) + Beta**2
-                Vpsi(shear_steps) = Vpsi(shear_steps) + Bpsi**2
-            end do
-
-            Aeta(shear_steps) = Aeta(shear_steps)/(Ntraj*sr)
-            Veta(shear_steps) = Veta(shear_steps)/(Ntraj*sr**2)
-            Veta(shear_steps) = sqrt((Veta (shear_steps)- Aeta(shear_steps)**2)/(Ntraj-1))
-
-            Apsi(shear_steps) = Apsi(shear_steps)/(Ntraj*sr**2)
-            Vpsi(shear_steps) = Vpsi(shear_steps)/(Ntraj*sr**4)
-            Vpsi(shear_steps) = sqrt((Vpsi(shear_steps) - Apsi(shear_steps)**2)/(Ntraj-1))
-
         end do
-
 
         call cpu_time(stop_time)
         !$ stop_time = omp_get_wtime()
         print *, "Run time:", &
                 stop_time - start_time, "seconds"
 
-!        print *, "Q-(3*b)/(b+5) = ", (Qavg-sqrt(3*b/(b+5))), " +- ", Vqavg
-!        print *, "S = ", S, " +- ", Serr
-!        print *, "Aeta values are", Aeta
-!        print *, "Veta values are", Veta
-!        print *, "Apsi values are", Apsi
-!        print *, "Vpsi values are", Vpsi
-
         !Check that my results agree with Kailash's results
         K_Aeta = (/1.36355, 1.36426, 1.20931, 0.25452, 0.15777/)
         K_Veta = (/0.00616, 0.00482, 0.00107, 0.00022, 0.00014/)
         K_Apsi = (/3.53116, 3.64638, 2.79976, 0.09888, 0.03609/)
         K_Vpsi = (/0.03368, 0.0078, 0.00212, 0.00005, 0.00002/)
-        do shear_steps = 1,size(sr_vals)
-            print *, "sr=", sr_vals(shear_steps)
-            print *, "My eta=", Aeta(shear_steps), "+-", Veta(shear_steps)
-            print *, "Kailash eta=", K_Aeta(shear_steps), "+-", K_Veta(shear_steps)
-            call assertEquals(K_Aeta(shear_steps), Aeta(shear_steps), &
-                              2*sqrt(Veta(shear_steps)**2+K_Veta(shear_steps)**2), "Aeta")
+        do s = 1,size(sr_vals)
+            print *, "sr=", sr_vals(s)
+            print *, "My eta=", out_var(s)%Aeta, "+-", out_var(s)%Veta
+            print *, "Kailash eta=", K_Aeta(s), "+-", K_Veta(s)
+            call assertEquals(K_Aeta(s), out_var(s)%Aeta, &
+                              2*sqrt(out_var(s)%Veta**2+K_Veta(s)**2), "Aeta")
             print *, ""
-            print *, "My psi=", Apsi(shear_steps), "+-", Vpsi(shear_steps)
-            print *, "Kailash psi=", K_Apsi(shear_steps), "+-", K_Vpsi(shear_steps)
+            print *, "My psi=", out_var(s)%Apsi, "+-", out_var(s)%Vpsi
+            print *, "Kailash psi=", K_Apsi(s), "+-", K_Vpsi(s)
 
-            call assertEquals(K_Apsi(shear_steps), Apsi(shear_steps), &
-                              2*sqrt(Vpsi(shear_steps)**2+K_Vpsi(shear_steps)**2), "Veta")
+            call assertEquals(K_Apsi(s), out_var(s)%Apsi, &
+                              2*sqrt(out_var(s)%Vpsi**2+K_Vpsi(s)**2), "Veta")
             print *, ""
         end do
 
