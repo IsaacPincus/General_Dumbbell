@@ -6,9 +6,9 @@ program General_Dumbbell
     use omp_lib
     implicit none
 
-    integer*8 :: Nblocks, Nsteps, steps, block, time(1:8), seed, i, Ntraj, VR_opt, dist_opt
-    integer :: NTimeSteps, timestep, trajectories, Ndtwidths
-    real*8 :: sr, alpha, h, a, Q0, Nrelax_times, dt, dW(3), Bq, Bs, time1, time2, output_delay, k(3,3)
+    integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj, VR_opt, dist_opt
+    integer :: NTimeSteps, timestep, Ndtwidths
+    real*8 :: sr, alpha, h, a, Q0, Nrelax_times, dt, dW(3), output_delay, k(3,3)
     type(measured_variables) :: out_var
     !large arrays must be declared allocatable so they go into heap, otherwise
     !OpenMP threads run out of memory
