@@ -133,7 +133,7 @@ program General_Dumbbell
         implicit none
         call measure_shear_no_VR(out_var, Q, Q0, alpha, sr, Ntraj)
 
-        121 format(F7.2, 2X, E15.8, 2X, E15.8)
+        121 format(E11.4, 2X, E15.8, 2X, E15.8)
         !$OMP single
         write(20,121) steps*dt, out_var%Qavg, out_var%Vqavg
         write(21,121) steps*dt, out_var%S, out_var%Serr
@@ -148,7 +148,7 @@ program General_Dumbbell
         implicit none
         call measure_shear_with_VR(out_var, Q, Q_eq_VR, Q0, alpha, sr, Ntraj)
 
-        121 format(F7.2, 2X, E15.8, 2X, E15.8)
+        121 format(E11.4, 2X, E15.8, 2X, E15.8)
         !$OMP single
         write(20,121) steps*dt, out_var%Qavg, out_var%Vqavg
         write(21,121) steps*dt, out_var%S, out_var%Serr
@@ -162,11 +162,11 @@ program General_Dumbbell
     subroutine initialise_output_files_timestep()
         implicit none
 
-        write(20,*) "Timestep width is: ", dt
-        write(21,*) "Timestep width is: ", dt
-        write(22,*) "Timestep width is: ", dt
-        write(23,*) "Timestep width is: ", dt
-        write(24,*) "Timestep width is: ", dt
+        write(20,'(E11.4)') dt
+        write(21,'(E11.4)') dt
+        write(22,'(E11.4)') dt
+        write(23,'(E11.4)') dt
+        write(24,'(E11.4)') dt
 
     end subroutine
 
