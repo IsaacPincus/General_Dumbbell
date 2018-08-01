@@ -38,6 +38,7 @@ Program Dumbbell_Validation_tests
         call test_eq_FENE_semimp(0.01D0, 1000, 10000)
         call test_semimp_euler_equal(0.01D0, 100, 10000)
         call test_FENE_HI_shear_semimp_vs_Kailash_code(0.01D0, 1000, 10000)
+        !call test_FF_zero_shear_viscosity(0.01D0, 2000, 100000)
 
         !p-test on likelihood of k or more 'failures' in n trials
         call get_failed_count(k)
@@ -566,5 +567,93 @@ Program Dumbbell_Validation_tests
 
     end subroutine
 
+    subroutine test_FF_zero_shear_viscosity(dt, Nsteps, Ntraj)
+        implicit none
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i, s
+        real*8 :: start_time, stop_time, alpha, h, a, sr, Q0, eta_ana, psi_ana, Q2_ana
+        type(measured_variables) out_var
+        real*8, dimension(3) :: dW
+        real*8, dimension(3,3) :: k
+        !large arrays must be declared allocatable so they go into heap, otherwise
+        !OpenMP threads run out of memory
+        real*8, dimension(:, :), allocatable :: Q, Q_eq_VR
+
+        call date_and_time(values=time)
+        seed = time(8)*100 + time(7)*10
+
+        allocate(Q(3,1:Ntraj), Q_eq_VR(3,1:Ntraj))
+
+        k(:,:) = 0.D0
+
+        sr = 0.001D0
+
+        Q0 = 5.D0
+        alpha = 0.1D0
+        h = 0.D0
+        a = sqrt(PI)*h
+
+        print *, "Correct zero-shear (sr=", sr, ") viscosity for FF dumbbells"
+
+        Q = generate_Q_FF(Q0, alpha, Ntraj, seed, 10000)
+        Q_eq_VR = Q
+
+        call cpu_time(start_time)
+        !$ start_time = omp_get_wtime()
+
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, out_var)
+        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
+        do steps = 1,Nsteps
+            !$OMP DO
+            do i = 1,Ntraj
+                dW = Wiener_step(seed, dt)
+                k(1,2) = sr
+                Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW)
+                k(1,2) = 0.D0
+                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW)
+            end do
+            !$OMP END DO
+
+        end do
+        ! Measurement
+        call measure_shear_with_VR(out_var, Q, Q_eq_VR, Q0, alpha, sr, Ntraj)
+        !$OMP END parallel
+
+        call cpu_time(stop_time)
+        !$ stop_time = omp_get_wtime()
+        print *, "Run time:", &
+                stop_time - start_time, "seconds"
+
+        Q2_ana = (((3.D0*alpha)/(alpha+5.D0)+6.D0*Q0**2)*(alpha/(alpha+3.D0))+Q0**4)/&
+                  (alpha/(alpha+3.D0)+Q0**2)
+
+        eta_ana = (1.D0/3.D0)*Q2_ana
+
+        psi_ana = (1.D0/15.D0)*((((5.D0*alpha)/(alpha+7.D0)+15.D0*Q0**2)*&
+                  (3.D0*alpha)/(alpha+5.D0)+15.D0*Q0**4)*(alpha/(alpha+3.D0))+Q0**6)/&
+                  (alpha/(alpha+3.D0)+Q0**2)
+
+        print *, "Q^2_analytical = ", Q2_ana
+        print *, "eta_analytical = ", eta_ana
+        print *, "psi_analytical = ", psi_ana
+        print *, "Qavg = ", out_var%Qavg
+        print *, "Aeta = ", out_var%Aeta
+        print *, "Apsi = ", out_var%Apsi
+        print *, "Qavg-sqrt(Q^2)_0 = " , out_var%Qavg-sqrt(Q2_ana), " +- ", out_var%Vqavg
+        print *, "Aeta-eta_0 = ", (out_var%Aeta-eta_ana), " +- ", out_var%Veta
+        print *, "Apsi-psi_0 = ", (out_var%Apsi-psi_ana), " +- ", out_var%Vpsi
+
+        !Check that both Qavg and S are within acceptable range
+        call assertEquals(sqrt(Q2_ana), out_var%Qavg, out_var%Vqavg*2.D0, &
+                          "Qavg != sqrt(Q^2)_analytical for sr=0.001 FF dumbbell")
+        call assertEquals(eta_ana, out_var%Aeta, out_var%Veta*2.D0, &
+                          "Aeta != eta_analytical for sr=0.001 FF dumbbell")
+        call assertEquals(psi_ana, out_var%Apsi, out_var%Vpsi*2.D0, &
+                          "Apsi != psi_analytical for sr=0.001 FF dumbbell")
+
+        print *, ""
+
+    end subroutine
 
 End Program
