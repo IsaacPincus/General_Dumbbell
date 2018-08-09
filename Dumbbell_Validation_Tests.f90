@@ -7,8 +7,8 @@ Program Dumbbell_Validation_tests
     implicit none
 
     call init_fruit
-    call Unit_tests
     call Validation_tests
+    !call Unit_tests
     call fruit_summary
     call fruit_finalize
 
@@ -16,6 +16,87 @@ Program Dumbbell_Validation_tests
 
     subroutine Unit_tests()
         implicit none
+
+        print *, "Running unit tests"
+
+        call unit_test_find_roots_single()
+        call unit_test_find_roots_multiple()
+        print *, ""
+
+    end subroutine
+
+    subroutine unit_test_find_roots_single()
+        implicit none
+        real*8 :: Q0, Y, alpha, beta
+        integer*8 :: i
+        character(len=256) :: output
+
+        Q0 = 1.D0
+        alpha = 1.D-2
+        beta = 1.D-5
+        Y = 10000.D0
+
+        write(output, *) "Q0=", Q0, " Y=", Y, " alpha=", alpha, " beta=", beta
+        call assertEquals(Q0, &
+                find_roots(-(2.D0*Q0+Y), &
+                           -(alpha-Q0**2-2.D0*Y*Q0+beta), &
+                           (beta*Q0+Y*alpha-Y*Q0**2), &
+                           Q0-sqrt(alpha), &
+                           Q0+sqrt(alpha)), &
+                sqrt(alpha), output)
+        call assertEquals(Q0, &
+                find_roots_quad(real(-(2.Q0*Q0+Y),quad), &
+                           real(-(alpha-Q0**2-2.D0*Y*Q0+beta),quad), &
+                           real((beta*Q0+Y*alpha-Y*Q0**2),quad), &
+                           real(Q0-sqrt(alpha),quad), &
+                           real(Q0+sqrt(alpha),quad)), &
+                sqrt(alpha), output)
+
+
+    end subroutine
+
+    subroutine unit_test_find_roots_multiple()
+        implicit none
+        real*8 :: logstep
+        real*8 :: Q0(9), Y(9), alpha(9), beta(9)
+        integer*8 :: i, exmin, exmax
+        integer :: m,n,o,p
+        character(len=256) :: output
+
+        logstep = 1.D0
+        exmin = -2.D0
+        exmax = 6.D0
+
+        !Generate some logarithmically spaced values
+        Y = (/((i*logstep),i=exmin,exmax)/)
+        Y = 10**Y
+        Q0 = (/((i*logstep),i=exmin,exmax)/)
+        Q0 = 10**Q0
+!        Q0 = 1.D0
+        alpha = (/((i*logstep),i=exmin,exmax)/)
+        alpha = 10**alpha
+!        alpha = 1.D-2
+        beta = (/((i*logstep),i=exmin,exmax)/)
+        beta = 10**(beta-4.D0)
+
+        do m=1,(exmax-exmin+1)
+        !do m=1,1
+            do n=1,(exmax-exmin+1)
+                do o=1,(exmax-exmin+1)
+                !do o=1,1
+                    do p=1,(exmax-exmin+1)
+                        write(output, *) "Q0=", Q0(m), " Y=", Y(n), " alpha=", alpha(o), " beta=", beta(p)
+                        call assertEquals(Q0(m), &
+                                find_roots(-(2.D0*Q0(m)+Y(n)), &
+                                           -(alpha(o)-Q0(m)**2-2.D0*Y(n)*Q0(m)+beta(p)), &
+                                           (beta(p)*Q0(m)+Y(n)*alpha(o)-Y(n)*Q0(m)**2), &
+                                           Q0(m)-sqrt(alpha(o)), &
+                                           Q0(m)+sqrt(alpha(o))), &
+                                sqrt(alpha(o)), output)
+                    end do
+                end do
+            end do
+        end do
 
     end subroutine
 
@@ -29,6 +110,7 @@ Program Dumbbell_Validation_tests
         ! i.e. a 95% confidence level
         k = 0
         n = 0
+        print *, "Running Validation tests"
         print *, "We expect about 5% of tests to fail by chance, or ~1/20"
         print *, ""
         call test_eq_hookean_semimp(0.01D0, 1000, 10000)
@@ -527,9 +609,9 @@ Program Dumbbell_Validation_tests
                 do i = 1,Ntraj
                     dW = Wiener_step(seed, dt)
                     k(1,2) = sr
-                    Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW)
+                    Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW, 0.D0)
                     k(1,2) = 0.D0
-                    Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, b, a, dW)
+                    Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, b, a, dW, 0.D0)
                 end do
                 !$OMP END DO
 

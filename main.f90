@@ -8,7 +8,7 @@ program General_Dumbbell
 
     integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj, VR_opt, dist_opt
     integer :: NTimeSteps, timestep, Ndtwidths
-    real*8 :: sr, alpha, h, a, Q0, Nrelax_times, dt, dW(3), output_delay, k(3,3)
+    real*8 :: sr, alpha, h, a, Q0, Nrelax_times, dt, dW(3), output_delay, k(3,3), delay_counter
     type(measured_variables) :: out_var
     !large arrays must be declared allocatable so they go into heap, otherwise
     !OpenMP threads run out of memory
@@ -53,6 +53,7 @@ program General_Dumbbell
 
         dt = timestepwidths(timestep)
         NtimeSteps = int(Nrelax_times/dt)
+        delay_counter = 0.D0
 
         !Also works for Fraenkel, FENE and Hookean springs
         !Reduce final input for faster computation of equilibrium dist
@@ -69,11 +70,15 @@ program General_Dumbbell
                 !$OMP DO schedule(dynamic, 100)
                 do i=1,Ntraj
                     dW = Wiener_step(seed, dt)
-                    Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW)
+                    Q(:,i) = step(Q(:,i), k, dt, Q0, alpha, a, dW, 0.D0)
                 end do
                 !$OMP END DO
-                if (steps.eq.1.or.(mod(steps,nint(output_delay/dt)).eq.0).or.steps.eq.NTimeSteps) then
+                delay_counter = delay_counter + dt
+                if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
                     call write_data_to_files_no_VR()
+                    if (delay_counter.ge.(output_delay-1.D-10)) then
+                        delay_counter = delay_counter - output_delay
+                    end if
                 end if
             end do
 
@@ -93,8 +98,12 @@ program General_Dumbbell
                     Q_eq_VR(:,i) = step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW)
                 end do
                 !$OMP END DO
-                if (steps.eq.1.or.(mod(steps,nint(output_delay/dt)).eq.0).or.steps.eq.NTimeSteps) then
-                    call write_data_to_files_with_VR()
+                delay_counter = delay_counter + dt
+                if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
+                    call write_data_to_files_no_VR()
+                    if (delay_counter.ge.(output_delay-1.D-10)) then
+                        delay_counter = delay_counter - output_delay
+                    end if
                 end if
             end do
 
