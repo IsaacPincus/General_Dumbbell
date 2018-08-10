@@ -20,76 +20,72 @@ Program Dumbbell_Validation_tests
         print *, "Running unit tests"
 
         call unit_test_find_roots_single()
-        call unit_test_find_roots_multiple()
+        !call unit_test_find_roots_multiple()
         print *, ""
 
     end subroutine
 
     subroutine unit_test_find_roots_single()
         implicit none
-        real*8 :: Q0, Y, alpha, beta
+        real*8 :: Q0, Y, alpha, dt
         integer*8 :: i
         character(len=256) :: output
 
         Q0 = 1.D0
         alpha = 1.D-2
-        beta = 1.D-5
+        dt = 0.0001D0
         Y = 10000.D0
 
-        write(output, *) "Q0=", Q0, " Y=", Y, " alpha=", alpha, " beta=", beta
+        write(output, *) "Q0=", Q0, " Y=", Y, " alpha=", alpha, " dt=", dt
         call assertEquals(Q0, &
                 find_roots(-(2.D0*Q0+Y), &
-                           -(alpha-Q0**2-2.D0*Y*Q0+beta), &
-                           (beta*Q0+Y*alpha-Y*Q0**2), &
+                           -(alpha-Q0**2-2.D0*Y*Q0+dt/2.D0*alpha), &
+                           (dt/2.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
                            Q0-sqrt(alpha), &
                            Q0+sqrt(alpha)), &
                 sqrt(alpha), output)
-        call assertEquals(Q0, &
-                find_roots_quad(real(-(2.Q0*Q0+Y),quad), &
-                           real(-(alpha-Q0**2-2.D0*Y*Q0+beta),quad), &
-                           real((beta*Q0+Y*alpha-Y*Q0**2),quad), &
-                           real(Q0-sqrt(alpha),quad), &
-                           real(Q0+sqrt(alpha),quad)), &
-                sqrt(alpha), output)
 
+        call assertEquals(Q0, &
+                find_roots_cubic_newton(-(2.D0*Q0+Y), &
+                           -(alpha-Q0**2-2.D0*Y*Q0+dt/2.D0*alpha), &
+                           (dt/2.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
+                           Q0-sqrt(alpha), &
+                           Q0+sqrt(alpha), &
+                           Q0+sqrt(alpha)), &
+                sqrt(alpha), output)
 
     end subroutine
 
     subroutine unit_test_find_roots_multiple()
         implicit none
         real*8 :: logstep
-        real*8 :: Q0(9), Y(9), alpha(9), beta(9)
-        integer*8 :: i, exmin, exmax
+        real*8 :: Q0(5), Y(9), alpha(5), dt(3)
+        integer*8 :: i
         integer :: m,n,o,p
         character(len=256) :: output
 
         logstep = 1.D0
-        exmin = -2.D0
-        exmax = 6.D0
 
         !Generate some logarithmically spaced values
-        Y = (/((i*logstep),i=exmin,exmax)/)
-        Y = 10**Y
-        Q0 = (/((i*logstep),i=exmin,exmax)/)
+        Y = (/((i*logstep),i=-2,6)/)
+        Y = 10**(Y+0.001D0)
+        Q0 = (/((i*logstep),i=0,4)/)
         Q0 = 10**Q0
 !        Q0 = 1.D0
-        alpha = (/((i*logstep),i=exmin,exmax)/)
-        alpha = 10**alpha
+        alpha = (/((i*logstep),i=-2,2)/)
+        alpha = 10**(alpha)
 !        alpha = 1.D-2
-        beta = (/((i*logstep),i=exmin,exmax)/)
-        beta = 10**(beta-4.D0)
+        dt = (/0.1D0, 0.01D0, 0.001D0/)
 
-        do m=1,(exmax-exmin+1)
-        !do m=1,1
-            do n=1,(exmax-exmin+1)
-                do o=1,(exmax-exmin+1)
-                !do o=1,1
-                    do p=1,(exmax-exmin+1)
-                        write(output, *) "Q0=", Q0(m), " Y=", Y(n), " alpha=", alpha(o), " beta=", beta(p)
+        do m=1,size(Q0)
+            do n=1,size(Y)
+                do o=1,size(alpha)
+                    do p=1,size(dt)
+                        write(output, *) "Q0=", Q0(m), " Y=", Y(n), " alpha=", alpha(o), " dt=", dt(p)
                         call assertEquals(Q0(m), &
                                 find_roots(-(2.D0*Q0(m)+Y(n)), &
-                                           -(alpha(o)-Q0(m)**2-2.D0*Y(n)*Q0(m)+beta(p)), &
-                                           (beta(p)*Q0(m)+Y(n)*alpha(o)-Y(n)*Q0(m)**2), &
+                                           -(alpha(o)-Q0(m)**2-2.D0*Y(n)*Q0(m)+dt(p)/2.D0*alpha(o)), &
+                                           (dt(p)/2.D0*alpha(o)*Q0(m)+Y(n)*alpha(o)-Y(n)*Q0(m)**2), &
                                            Q0(m)-sqrt(alpha(o)), &
                                            Q0(m)+sqrt(alpha(o))), &
                                 sqrt(alpha(o)), output)
@@ -113,14 +109,13 @@ Program Dumbbell_Validation_tests
         print *, "Running Validation tests"
         print *, "We expect about 5% of tests to fail by chance, or ~1/20"
         print *, ""
-        call test_eq_hookean_semimp(0.01D0, 1000, 10000)
-        call test_Hookean_viscosity_semimp(0.01D0, 100, 100000)
-        call test_Hookean_psi2_with_HI_semimp(0.05D0, 1000, 100000)
-        call test_Hookean_psi2_with_HI_semimp_2nd_method(0.05D0, 1000, 100000)
-        call test_eq_FENE_semimp(0.01D0, 1000, 10000)
-        call test_semimp_euler_equal(0.01D0, 100, 10000)
-        call test_FENE_HI_shear_semimp_vs_Kailash_code(0.01D0, 1000, 10000)
-        !call test_FF_zero_shear_viscosity(0.01D0, 2000, 100000)
+        call test_eq_hookean_semimp(0.005D0, 1000, 10000)
+        call test_Hookean_viscosity_semimp(0.005D0, 100000)
+        call test_Hookean_psi2_with_HI_semimp(0.005D0, 1000, 100000)
+        call test_eq_FENE_semimp(0.005D0, 1000, 10000)
+        call test_semimp_euler_equal(0.005D0, 100, 100000)
+        call test_FENE_HI_shear_semimp_vs_Kailash_code(0.005D0, 2000, 10000)
+        call test_FF_zero_shear_viscosity(0.01D0, 2000, 100000)
 
         !p-test on likelihood of k or more 'failures' in n trials
         call get_failed_count(k)
@@ -199,11 +194,11 @@ Program Dumbbell_Validation_tests
         print *, ""
     end subroutine
 
-    subroutine test_Hookean_viscosity_semimp(dt, Nsteps, Ntraj)
+    subroutine test_Hookean_viscosity_semimp(dt, Ntraj)
         implicit none
-        integer*8, intent(in) :: Nsteps, Ntraj
+        integer*8, intent(in) :: Ntraj
         real*8, intent(in) :: dt
-        integer*8 :: steps, time(1:8), seed, i
+        integer*8 :: steps, time(1:8), seed, i, Nsteps
         real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3)
         type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
@@ -216,6 +211,8 @@ Program Dumbbell_Validation_tests
         seed = time(8)*100 + time(7)*10
 
         allocate(Q(3,1:Ntraj))
+
+        Nsteps = nint(1.D0/dt)
 
         sr = 1.D0;
 
@@ -302,70 +299,6 @@ Program Dumbbell_Validation_tests
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
                 Q(:,i) =  step(Q(:,i), k, dt, 0.D0, 10000.D0, a, dW)
-            end do
-            !$OMP END DO
-
-        end do
-
-        call measure_shear_no_VR(out_var, Q, 0.D0, 10000.D0, sr, Ntraj)
-
-        !$OMP END parallel
-
-        call cpu_time(stop_time)
-        !$ stop_time = omp_get_wtime()
-        print *, "Run time:", &
-                stop_time - start_time, "seconds"
-
-        print *, "Apsi2+0.01348 = ", (out_var%Apsi2+0.01348D0), " +- ", out_var%Vpsi2
-
-        !Check that both Qavg and S are within acceptable range
-        call assertEquals(-0.01348D0, out_var%Apsi2, out_var%Vpsi2*2.D0, &
-                          "psi_2 != -0.01348 for sr=1, hstar=0.15 Hookean Dumbbell (semimp)")
-
-        deallocate(Q)
-        print *, ""
-    end subroutine
-
-    subroutine test_Hookean_psi2_with_HI_semimp_2nd_method(dt, Nsteps, Ntraj)
-        implicit none
-        integer*8, intent(in) :: Nsteps, Ntraj
-        real*8, intent(in) :: dt
-        integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3), h, a
-        type(measured_variables) out_var
-        !large arrays must be declared allocatable so they go into heap, otherwise
-        !OpenMP threads run out of memory
-        real*8, dimension(:, :), allocatable :: Q
-
-        print *, "Running sr=1, hstar=0.15 hookean dumbbell with semimp integrator test, 2nd method"
-
-        call date_and_time(values=time)
-        seed = time(8)*100 + time(7)*10
-
-        allocate(Q(3,1:Ntraj))
-
-        sr = 1.D0;
-
-        h = 0.15D0
-        a = h*sqrt(PI)
-
-        k(:,:) = 0.D0
-        k(1,2) = 1.D0
-        k = sr*k
-
-        Q = generate_Q_FF(0.D0, 10000.D0, Ntraj, seed, 10000)
-
-        call cpu_time(start_time)
-        !$ start_time = omp_get_wtime()
-
-        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var)
-        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
-
-        do steps = 1,Nsteps
-            !$OMP DO
-            do i = 1,Ntraj
-                dW = Wiener_step(seed, dt)
-                Q(:,i) =  step(Q(:,i), k, dt, 0.D0, 10000.D0, a, dW, 5.D0)
             end do
             !$OMP END DO
 
@@ -609,9 +542,9 @@ Program Dumbbell_Validation_tests
                 do i = 1,Ntraj
                     dW = Wiener_step(seed, dt)
                     k(1,2) = sr
-                    Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW, 0.D0)
+                    Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW)
                     k(1,2) = 0.D0
-                    Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, b, a, dW, 0.D0)
+                    Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, b, a, dW)
                 end do
                 !$OMP END DO
 
@@ -669,7 +602,7 @@ Program Dumbbell_Validation_tests
 
         k(:,:) = 0.D0
 
-        sr = 0.001D0
+        sr = 0.0001D0
 
         Q0 = 5.D0
         alpha = 0.1D0
@@ -691,9 +624,9 @@ Program Dumbbell_Validation_tests
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
                 k(1,2) = sr
-                Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW)
+                Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW, 0.D0)
                 k(1,2) = 0.D0
-                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW)
+                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW, 0.D0)
             end do
             !$OMP END DO
 

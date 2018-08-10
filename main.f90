@@ -70,7 +70,7 @@ program General_Dumbbell
                 !$OMP DO schedule(dynamic, 100)
                 do i=1,Ntraj
                     dW = Wiener_step(seed, dt)
-                    Q(:,i) = step(Q(:,i), k, dt, Q0, alpha, a, dW, 0.D0)
+                    Q(:,i) = step(Q(:,i), k, dt, Q0, alpha, a, dW)
                 end do
                 !$OMP END DO
                 delay_counter = delay_counter + dt
