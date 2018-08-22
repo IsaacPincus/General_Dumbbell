@@ -1,6 +1,12 @@
 module Dumbbell_util
 
     implicit none
+    integer, parameter :: quad = SELECTED_REAL_KIND(32)
+    real*8, parameter :: PI = 4.D0*atan(1.0D0)
+    real*8, parameter, dimension(3,3) :: delT = reshape((/1, 0, 0, &
+                                                          0, 1, 0, &
+                                                          0, 0, 1/), &
+                                                        shape(delT))
 
     type measured_variables
         real*8 :: Qavg, Vqavg, S, Serr, Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2
@@ -253,6 +259,140 @@ module Dumbbell_util
         return
 
     end function Wiener_step
+
+    function find_roots(a, b, c, lower_bound, upper_bound)
+        implicit none
+        real*8, intent(in) :: a, b, c, lower_bound, upper_bound
+        real*8 :: find_roots
+        real*8 :: Q, R, theta, x, Au, Bu
+        integer :: i, iter
+
+        Q = (a**2 - 3.D0*b)/9.D0
+        R = (2.D0*a**3 - 9.D0*a*b + 27.D0*c)/54.D0
+
+        !If roots are all real, get root in range
+        if (R**2.lt.Q**3) then
+            iter = 0
+            theta = acos(R/sqrt(Q**3))
+            do i=-1,1
+                iter = iter+1
+                x = -2.D0*sqrt(Q)*cos((theta + dble(i)*PI*2.D0)/3.D0)-a/3.D0
+                if ((x.ge.lower_bound).and.(x.le.upper_bound)) then
+                    find_roots = x
+                    return
+                end if
+            end do
+        !Otherwise, two imaginary roots and one real root, return real root
+        else
+            Au = -sign(1.D0, R)*(abs(R)+sqrt(R**2-Q**3))**(1.D0/3.D0)
+            if (Au.eq.0.D0) then
+                Bu = 0.D0
+            else
+                Bu = Q/Au
+            end if
+            find_roots = (Au+Bu)-a/3.D0
+            return
+        end if
+
+    end function find_roots
+
+    function find_roots_cubic_newton(a, b, c, lower_bound, upper_bound, initial_guess)
+        real*8, intent(in) :: a, b, c, lower_bound, upper_bound, initial_guess
+        real*8 :: find_roots_cubic_newton
+        real*8 :: x0, x1
+        real*8, parameter :: exit_err = 1.D-10
+        integer :: i
+
+        x0 = initial_guess
+        do i=1,50
+            x1 = x0-(x0**3+a*x0**2+b*x0+c)/(3.D0*x0**2+2.D0*a*x0+b)
+            if (((abs(x1-x0)).lt.exit_err).and.((x1.le.(upper_bound+1.D-8)).and.(x1.ge.(lower_bound-1.D-8)))) then
+                find_roots_cubic_newton = x1
+                return
+            else
+                x0 = x1
+            end if
+        end do
+        print *, "didn't find root, final guess is ", x1
+        find_roots_cubic_newton = x1
+    end function
+
+    function find_roots_quad(a, b, c, lower_bound, upper_bound)
+        implicit none
+        real(quad), intent(in) :: a, b, c, lower_bound, upper_bound
+        real*8 :: find_roots_quad
+        real(quad) :: Q, R, theta, x
+        integer :: i, iter
+
+        Q = (a**2 - 3.Q0*b)/9.Q0
+        R = (2.Q0*a**3 - 9.Q0*a*b + 27.Q0*c)/54.Q0
+
+        !iter = 0
+        theta = acos(R/sqrt(Q**3))
+        do i=-1,1
+            !iter = iter+1
+            x = -2.Q0*sqrt(Q)*cos((theta + real(i, kind=quad)*PI*2.Q0)/3.Q0)-a/3.Q0
+            !print *, "iter = ", iter, "root = ", x
+            if ((x.ge.lower_bound).and.(x.le.upper_bound)) then
+                find_roots_quad = dble(x)
+                return
+            end if
+        end do
+       !print *, "Did not get a root, a=", a, " b=", b, " c=", c
+       !print *, R, Q
+
+    end function
+
+    function find_Y_range(beta, Q0, alpha)
+        implicit none
+        real*8, intent(in) :: beta, Q0, alpha
+        real*8 :: roots_dble, roots_quad, Ymin, Ymax, v1, v2, delta, tval
+        real*8, dimension(241) :: Y
+        logical :: first_success_passed
+        real*8, dimension(2) :: find_Y_range
+        integer :: i, n
+
+        Y = (/((dble(i)),i=-80,160)/)
+        Y = 10**(Y/20.D0)
+
+        Ymin = Y(1)
+        Ymax = Y(241)
+        delta = Q0*1.D-12
+        tval = 0.D0
+
+        first_success_passed = .false.
+
+        do n=1,size(Y)
+            roots_dble = find_roots(-(2.D0*Q0+Y(n)), &
+                               -(alpha-Q0**2-2.D0*Y(n)*Q0+beta), &
+                               (beta*Q0+Y(n)*alpha-Y(n)*Q0**2), &
+                               Q0-sqrt(alpha), &
+                               Q0+sqrt(alpha))
+            roots_quad = find_roots_quad(real(-(2.D0*Q0+Y(n)), kind=quad), &
+                               real(-(alpha-Q0**2-2.D0*Y(n)*Q0+beta), kind=quad), &
+                               real((beta*Q0+Y(n)*alpha-Y(n)*Q0**2), kind=quad), &
+                               real(Q0-sqrt(alpha), kind=quad), &
+                               real(Q0+sqrt(alpha), kind=quad))
+            v1 = roots_dble
+            v2 = roots_quad
+
+            if ((abs(v1 - v2) > delta).or.(v1.eq.tval).or.(v2.eq.tval)) then
+                if (first_success_passed) then
+                    Ymax = Y(n)
+                    EXIT
+                end if
+            else
+                if (.not.first_success_passed) then
+                    Ymin = Y(n)
+                    first_success_passed = .true.
+                end if
+            end if
+        end do
+
+        find_Y_range(1) = Ymin
+        find_Y_range(2) = Ymax
+
+    end function
 
     pure function beta(x,y)
         implicit none

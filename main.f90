@@ -8,7 +8,7 @@ program General_Dumbbell
 
     integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj, VR_opt, dist_opt
     integer :: NTimeSteps, timestep, Ndtwidths
-    real*8 :: sr, alpha, h, a, Q0, Nrelax_times, dt, dW(3), output_delay, k(3,3), delay_counter
+    real*8 :: sr, alpha, h, a, Q0, Nrelax_times, dt, dW(3), output_delay, k(3,3), delay_counter, YMinMax(2), Ymin, Ymax
     type(measured_variables) :: out_var
     !large arrays must be declared allocatable so they go into heap, otherwise
     !OpenMP threads run out of memory
@@ -61,6 +61,10 @@ program General_Dumbbell
 
         call initialise_output_files_timestep()
 
+        YMinMax = find_Y_range(dt, Q0, alpha)
+        Ymin = YMinMax(1)
+        Ymax = YMinMax(2)
+
         !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, VR_opt, out_var)
         !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
 
@@ -70,7 +74,7 @@ program General_Dumbbell
                 !$OMP DO schedule(dynamic, 100)
                 do i=1,Ntraj
                     dW = Wiener_step(seed, dt)
-                    Q(:,i) = step(Q(:,i), k, dt, Q0, alpha, a, dW)
+                    Q(:,i) = step(Q(:,i), k, dt, Q0, alpha, a, dW, 0.D0)
                 end do
                 !$OMP END DO
                 delay_counter = delay_counter + dt

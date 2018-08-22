@@ -21,78 +21,123 @@ Program Dumbbell_Validation_tests
 
         call unit_test_find_roots_single()
         !call unit_test_find_roots_multiple()
+        !call unit_test_find_Y_range()
         print *, ""
+
+    end subroutine
+
+    subroutine unit_test_find_Y_range()
+        implicit none
+        real*8 :: alpha, dt, Q0, YMinMax(2), Ymin, Ymax
+
+        dt = 0.01D0
+        alpha = 0.0001D0
+        Q0 = 1000.D0
+
+        YMinMax = find_Y_range(dt*alpha/2.D0, Q0, alpha)
+        Ymin = YMinMax(1)
+        Ymax = YMinMax(2)
+        print *, "Ymin =", Ymin, " Ymax =", Ymax
 
     end subroutine
 
     subroutine unit_test_find_roots_single()
         implicit none
-        real*8 :: Q0, Y, alpha, dt
+        real*8 :: Q0, Y, alpha, dt, duble, quadz, newtonbby
         integer*8 :: i
         character(len=256) :: output
 
         Q0 = 1.D0
-        alpha = 1.D-2
-        dt = 0.0001D0
-        Y = 10000.D0
+        alpha = 1.D-6
+        dt = 0.01D0
+        Y = 100.D0
 
-        write(output, *) "Q0=", Q0, " Y=", Y, " alpha=", alpha, " dt=", dt
-        call assertEquals(Q0, &
-                find_roots(-(2.D0*Q0+Y), &
-                           -(alpha-Q0**2-2.D0*Y*Q0+dt/2.D0*alpha), &
-                           (dt/2.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
+        duble = find_roots(-(2.D0*Q0+Y), &
+                           -(alpha-Q0**2-2.D0*Y*Q0+dt/4.D0*alpha), &
+                           (dt/4.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
                            Q0-sqrt(alpha), &
-                           Q0+sqrt(alpha)), &
-                sqrt(alpha), output)
+                           Q0+sqrt(alpha))
 
-        call assertEquals(Q0, &
-                find_roots_cubic_newton(-(2.D0*Q0+Y), &
-                           -(alpha-Q0**2-2.D0*Y*Q0+dt/2.D0*alpha), &
-                           (dt/2.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
+        quadz = find_roots_quad(real(-(2.D0*Q0+Y), kind=quad), &
+                               real(-(alpha-Q0**2-2.D0*Y*Q0+dt*alpha/4.D0), kind=quad), &
+                               real((dt*alpha/4.D0*Q0+Y*alpha-Y*Q0**2), kind=quad), &
+                               real(Q0-sqrt(alpha), kind=quad), &
+                               real(Q0+sqrt(alpha), kind=quad))
+
+        newtonbby = find_roots_cubic_newton(-(2.D0*Q0+Y), &
+                           -(alpha-Q0**2-2.D0*Y*Q0+dt/4.D0*alpha), &
+                           (dt/4.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
                            Q0-sqrt(alpha), &
                            Q0+sqrt(alpha), &
-                           Q0+sqrt(alpha)), &
-                sqrt(alpha), output)
+                           Q0+sqrt(alpha))
+
+        write(output, *) "Q0=", Q0, " Y=", Y, " alpha=", alpha, " dt=", dt
+        call assertEquals(Q0, duble, sqrt(alpha), output)
+
+        call assertEquals(Q0, newtonbby, sqrt(alpha), output)
+
+        call assertEquals(Q0, quadz, sqrt(alpha), output)
+
+        print *, "duble = ", duble
+        print *, "quadz = ", quadz
+        print *, "newtonbby = ", newtonbby
 
     end subroutine
 
     subroutine unit_test_find_roots_multiple()
         implicit none
-        real*8 :: logstep
-        real*8 :: Q0(5), Y(9), alpha(5), dt(3)
+        real*8 :: logstep, roots_dble, roots_quad
+        real*8 :: Q0(6), Y(13), alpha(9), dt(5)
         integer*8 :: i
-        integer :: m,n,o,p
+        integer :: m,n,o,p, k, kprev
         character(len=256) :: output
 
         logstep = 1.D0
 
         !Generate some logarithmically spaced values
-        Y = (/((i*logstep),i=-2,6)/)
-        Y = 10**(Y+0.001D0)
-        Q0 = (/((i*logstep),i=0,4)/)
+        Y = (/((i*logstep),i=-4,8)/)
+        Y = 10**(Y)
+        Q0 = (/((i*logstep),i=-1,4)/)
         Q0 = 10**Q0
-!        Q0 = 1.D0
-        alpha = (/((i*logstep),i=-2,2)/)
+!        Q0 = (/10.D0/)
+        alpha = (/((i*logstep),i=-6,2)/)
         alpha = 10**(alpha)
 !        alpha = 1.D-2
-        dt = (/0.1D0, 0.01D0, 0.001D0/)
+        dt = (/10.D0, 1.D0, 0.1D0, 0.01D0, 0.001D0/)
+!        dt = (/0.01D0/)
+
+        open(unit=20, file='failures.dat')
+
+        kprev = 0
 
         do m=1,size(Q0)
             do n=1,size(Y)
                 do o=1,size(alpha)
                     do p=1,size(dt)
-                        write(output, *) "Q0=", Q0(m), " Y=", Y(n), " alpha=", alpha(o), " dt=", dt(p)
-                        call assertEquals(Q0(m), &
-                                find_roots(-(2.D0*Q0(m)+Y(n)), &
+                        write(output, "(A, E10.3, A, E10.3, A, E10.3, A, E10.3)") &
+                                    "Q0=", Q0(m), " Y=", Y(n), " alpha=", alpha(o), " dt=", dt(p)
+                        roots_dble = find_roots(-(2.D0*Q0(m)+Y(n)), &
                                            -(alpha(o)-Q0(m)**2-2.D0*Y(n)*Q0(m)+dt(p)/2.D0*alpha(o)), &
                                            (dt(p)/2.D0*alpha(o)*Q0(m)+Y(n)*alpha(o)-Y(n)*Q0(m)**2), &
                                            Q0(m)-sqrt(alpha(o)), &
-                                           Q0(m)+sqrt(alpha(o))), &
-                                sqrt(alpha(o)), output)
+                                           Q0(m)+sqrt(alpha(o)))
+                        roots_quad = find_roots_quad(real(-(2.D0*Q0(m)+Y(n)), kind=quad), &
+                                           real(-(alpha(o)-Q0(m)**2-2.D0*Y(n)*Q0(m)+dt(p)/2.D0*alpha(o)), kind=quad), &
+                                           real((dt(p)/2.D0*alpha(o)*Q0(m)+Y(n)*alpha(o)-Y(n)*Q0(m)**2), kind=quad), &
+                                           real(Q0(m)-sqrt(alpha(o)), kind=quad), &
+                                           real(Q0(m)+sqrt(alpha(o)), kind=quad))
+                        call assertEquals(roots_dble, roots_quad, Q0(m)*1D-8, 0.D0, output)
+                        call get_failed_count(k)
+                        if (k.ne.kprev) then
+                            write(20, "(E10.3, 2X, E10.3, 2X, E10.3, 2X, E10.3)") Q0(m), Y(n), alpha(o), dt(p)
+                            kprev = k
+                        end if
                     end do
                 end do
             end do
         end do
+
+        close(unit=20)
 
     end subroutine
 
@@ -109,13 +154,15 @@ Program Dumbbell_Validation_tests
         print *, "Running Validation tests"
         print *, "We expect about 5% of tests to fail by chance, or ~1/20"
         print *, ""
-        call test_eq_hookean_semimp(0.005D0, 1000, 10000)
-        call test_Hookean_viscosity_semimp(0.005D0, 100000)
-        call test_Hookean_psi2_with_HI_semimp(0.005D0, 1000, 100000)
-        call test_eq_FENE_semimp(0.005D0, 1000, 10000)
-        call test_semimp_euler_equal(0.005D0, 100, 100000)
-        call test_FENE_HI_shear_semimp_vs_Kailash_code(0.005D0, 2000, 10000)
-        call test_FF_zero_shear_viscosity(0.01D0, 2000, 100000)
+!        call test_eq_hookean_semimp(0.005D0, 1000, 10000)
+!        call test_Hookean_viscosity_semimp(0.005D0, 100000)
+!        call test_Hookean_psi2_with_HI_semimp(0.005D0, 1000, 100000)
+!        call test_eq_FENE_semimp(0.005D0, 1000, 10000)
+!        call test_semimp_euler_equal(0.005D0, 100, 100000)
+        !call test_FENE_HI_shear_semimp_vs_Kailash_code(0.005D0, 2000, 10000)
+        !call test_FF_zero_shear_viscosity(0.01D0, 2000, 100000)
+        call test_FF_same_values_two_methods(0.01D0, 0.01D0, 5, 1000000)
+        !call test_high_shear_Y_range(0.01D0, 10, 10)
 
         !p-test on likelihood of k or more 'failures' in n trials
         call get_failed_count(k)
@@ -130,6 +177,100 @@ Program Dumbbell_Validation_tests
          "There is a ", prob*100.D0, "% chance of getting", k, " or more failures in", &
           n, " tests, assuming the underlying failure probability is 5% (2 sigma)"
         print *, ""
+
+    end subroutine
+
+    subroutine test_high_shear_Y_range(dt, Nsteps, Ntraj)
+        implicit none
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i, s
+        real*8 :: start_time, stop_time, alpha, h, a, sr, Q0, eta_ana, psi_ana, Q2_ana
+        real*8 :: YMinMax(2), Ymin, Ymax
+        type(measured_variables) out_var
+        real*8, dimension(3) :: dW
+        real*8, dimension(3,3) :: k
+        !large arrays must be declared allocatable so they go into heap, otherwise
+        !OpenMP threads run out of memory
+        real*8, dimension(:, :), allocatable :: Q
+
+        call date_and_time(values=time)
+        seed = time(8)*100 + time(7)*10
+
+        allocate(Q(3,1:Ntraj))
+
+        k(:,:) = 0.D0
+
+        sr = 4.D0
+
+        Q0 = 1.D0
+        alpha = 0.000001D0
+        h = 0.15D0
+        a = sqrt(PI)*h
+
+        print *, "High shear rate Y range test (sr=", sr, ") lengths for FF dumbbells"
+
+        Q = generate_Q_FF(Q0, alpha, Ntraj, seed, 10000)
+
+        call cpu_time(start_time)
+        !$ start_time = omp_get_wtime()
+
+        YMinMax = find_Y_range(dt*alpha/2.D0, Q0, alpha)
+        Ymin = YMinMax(1)
+        Ymax = YMinMax(2)
+!        Ymax = 1000.D0
+        print *, "Ymin =", Ymin, " Ymax =", Ymax
+
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var)
+        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
+        do steps = 1,Nsteps
+            !$OMP DO
+            do i = 1,Ntraj
+                dW = Wiener_step(seed, dt)
+                k(1,2) = sr
+                Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW, Ymin, Ymax)
+            end do
+            !$OMP END DO
+
+        end do
+        ! Measurement
+        call measure_shear_no_VR(out_var, Q, Q0, alpha, sr, Ntraj)
+        !$OMP END parallel
+
+        call cpu_time(stop_time)
+        !$ stop_time = omp_get_wtime()
+        print *, "Run time:", &
+                stop_time - start_time, "seconds"
+
+        Q2_ana = (((3.D0*alpha)/(alpha+5.D0)+6.D0*Q0**2)*(alpha/(alpha+3.D0))+Q0**4)/&
+                  (alpha/(alpha+3.D0)+Q0**2)
+
+        eta_ana = (1.D0/3.D0)*Q2_ana
+
+        psi_ana = (1.D0/15.D0)*((((5.D0*alpha)/(alpha+7.D0)+15.D0*Q0**2)*&
+                  (3.D0*alpha)/(alpha+5.D0)+15.D0*Q0**4)*(alpha/(alpha+3.D0))+Q0**6)/&
+                  (alpha/(alpha+3.D0)+Q0**2)
+
+        print *, "Q^2_analytical = ", Q2_ana
+        print *, "eta_analytical = ", eta_ana
+        print *, "psi_analytical = ", psi_ana
+        print *, "Qavg = ", out_var%Qavg
+        print *, "Aeta = ", out_var%Aeta
+        print *, "Apsi = ", out_var%Apsi
+        print *, "Qavg-sqrt(Q^2)_0 = " , out_var%Qavg-sqrt(Q2_ana), " +- ", out_var%Vqavg
+        print *, "Aeta-eta_0 = ", (out_var%Aeta-eta_ana), " +- ", out_var%Veta
+        print *, "Apsi-psi_0 = ", (out_var%Apsi-psi_ana), " +- ", out_var%Vpsi
+
+        !Check that both Qavg and S are within acceptable range
+        call assertEquals(sqrt(Q2_ana), out_var%Qavg, out_var%Vqavg*2.D0, &
+                          "Qavg != sqrt(Q^2)_analytical for sr=0.001 FF dumbbell")
+        call assertEquals(eta_ana, out_var%Aeta, out_var%Veta*2.D0, &
+                          "Aeta != eta_analytical for sr=0.001 FF dumbbell")
+        call assertEquals(psi_ana, out_var%Apsi, out_var%Vpsi*2.D0, &
+                          "Apsi != psi_analytical for sr=0.001 FF dumbbell")
+
+        print *, ""
+
 
     end subroutine
 
@@ -542,9 +683,9 @@ Program Dumbbell_Validation_tests
                 do i = 1,Ntraj
                     dW = Wiener_step(seed, dt)
                     k(1,2) = sr
-                    Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW)
+                    Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW, 0.D0)
                     k(1,2) = 0.D0
-                    Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, b, a, dW)
+                    Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, b, a, dW, 0.D0)
                 end do
                 !$OMP END DO
 
@@ -666,6 +807,137 @@ Program Dumbbell_Validation_tests
                           "Aeta != eta_analytical for sr=0.001 FF dumbbell")
         call assertEquals(psi_ana, out_var%Apsi, out_var%Vpsi*2.D0, &
                           "Apsi != psi_analytical for sr=0.001 FF dumbbell")
+
+        print *, ""
+
+    end subroutine
+
+    subroutine test_FF_same_values_two_methods(dtold, dtnew, runtime, Ntraj)
+        implicit none
+        integer*8, intent(in) :: runtime, Ntraj
+        real*8, intent(in) :: dtnew, dtold
+        integer*8 :: steps, time(1:8), seed, i, s, Nsteps
+        real*8 :: start_time, stop_time, alpha, h, a, sr, Q0, dt, Q2_ana
+        type(measured_variables) out_var_old, out_var_new
+        real*8, dimension(3) :: dW
+        real*8, dimension(3,3) :: k
+        !large arrays must be declared allocatable so they go into heap, otherwise
+        !OpenMP threads run out of memory
+        real*8, dimension(:, :), allocatable :: Q, Q_eq_VR
+
+        call date_and_time(values=time)
+        seed = time(8)*100 + time(7)*10
+
+        allocate(Q(3,1:Ntraj), Q_eq_VR(3,1:Ntraj))
+
+        k(:,:) = 0.D0
+
+        sr = 1.D0
+
+        Q0 = 5.D0
+        alpha = 0.1D0
+        h = 0.15D0
+        a = sqrt(PI)*h
+
+        print *, "Correct viscosity for FF dumbbells"
+
+        Q = generate_Q_FF(Q0, alpha, Ntraj, seed, 10000)
+        Q_eq_VR = Q
+
+        call cpu_time(start_time)
+        !$ start_time = omp_get_wtime()
+
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, out_var_old, out_var_new)
+        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
+        Nsteps = nint(runtime/dtold)
+        dt = dtold
+        do steps = 1,Nsteps
+            !$OMP DO
+            do i = 1,Ntraj
+                dW = Wiener_step(seed, dt)
+                k(1,2) = sr
+                Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW, 0.D0)
+                k(1,2) = 0.D0
+                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW, 0.D0)
+            end do
+            !$OMP END DO
+
+        end do
+        ! Measurement
+        call measure_shear_with_VR(out_var_old, Q, Q_eq_VR, Q0, alpha, sr, Ntraj)
+        !$OMP END parallel
+
+        call cpu_time(stop_time)
+        !$ stop_time = omp_get_wtime()
+        print *, "Run time_old:", &
+                stop_time - start_time, "seconds"
+
+        call cpu_time(start_time)
+        !$ start_time = omp_get_wtime()
+
+        Q = generate_Q_FF(Q0, alpha, Ntraj, seed, 10000)
+        Q_eq_VR = Q
+
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, out_var_old, out_var_new)
+        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
+        Nsteps = nint(runtime/dtnew)
+        dt = dtnew
+        do steps = 1,Nsteps
+            !$OMP DO
+            do i = 1,Ntraj
+                dW = Wiener_step(seed, dt)
+                k(1,2) = sr
+                Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW)
+                k(1,2) = 0.D0
+                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW)
+            end do
+            !$OMP END DO
+
+        end do
+        ! Measurement
+        call measure_shear_with_VR(out_var_new, Q, Q_eq_VR, Q0, alpha, sr, Ntraj)
+        !$OMP END parallel
+
+        call cpu_time(stop_time)
+        !$ stop_time = omp_get_wtime()
+        print *, "Run time_new:", &
+                stop_time - start_time, "seconds"
+
+        Q2_ana = (((3.D0*alpha)/(alpha+5.D0)+6.D0*Q0**2)*(alpha/(alpha+3.D0))+Q0**4)/&
+                  (alpha/(alpha+3.D0)+Q0**2)
+
+
+        print *, "Q_ana = ", sqrt(Q2_ana)
+        print *, "Qavg_old = ", out_var_old%Qavg
+        print *, "Aeta_old = ", out_var_old%Aeta
+        print *, "Apsi_old = ", out_var_old%Apsi
+        print *, "S_old = ", out_var_old%S
+        print *, "Qavg_new = ", out_var_new%Qavg
+        print *, "Aeta_new = ", out_var_new%Aeta
+        print *, "Apsi_new = ", out_var_new%Apsi
+        print *, "S_new = ", out_var_new%S
+        print *, "Qavg_old-Qavg_new = " , out_var_old%Qavg-out_var_new%Qavg, &
+                 " +- ", sqrt(out_var_old%Vqavg**2+out_var_new%Vqavg**2)
+        print *, "Aeta_old-Aeta_new = " , out_var_old%Aeta-out_var_new%Aeta, &
+                 " +- ", sqrt(out_var_old%Veta**2+out_var_new%Veta**2)
+        print *, "Apsi_old-Apsi_new = " , out_var_old%Apsi-out_var_new%Apsi, &
+                 " +- ", sqrt(out_var_old%Vpsi**2+out_var_new%Vpsi**2)
+        print *, "S_old-S_new = " , out_var_old%S-out_var_new%S, &
+                 " +- ", sqrt(out_var_old%Serr**2+out_var_new%Serr**2)
+
+        !Check that both Qavg and S are within acceptable range
+        call assertEquals(out_var_old%Qavg, out_var_new%Qavg, &
+                           sqrt(out_var_old%Vqavg**2+out_var_new%Vqavg**2)*2.D0, &
+                          "Qavg_old != Qavg_new for sr=0.001 FF dumbbell")
+        call assertEquals(out_var_old%Aeta, out_var_new%Aeta, &
+                           sqrt(out_var_old%Veta**2+out_var_new%Veta**2)*2.D0, &
+                          "Aeta_old != Aeta_new for sr=0.001 FF dumbbell")
+        call assertEquals(out_var_old%Apsi, out_var_new%Apsi, &
+                           sqrt(out_var_old%Vpsi**2+out_var_new%Vpsi**2)*2.D0, &
+                          "Apsi_old != Apsi_new for sr=0.001 FF dumbbell")
+        call assertEquals(out_var_old%S, out_var_new%S, &
+                           sqrt(out_var_old%Serr**2+out_var_new%Serr**2)*2.D0, &
+                          "S_old != S_new for sr=0.001 FF dumbbell")
 
         print *, ""
 
