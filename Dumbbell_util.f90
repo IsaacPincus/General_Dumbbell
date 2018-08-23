@@ -260,7 +260,7 @@ module Dumbbell_util
 
     end function Wiener_step
 
-    function find_roots(a, b, c, lower_bound, upper_bound)
+    pure function find_roots(a, b, c, lower_bound, upper_bound)
         implicit none
         real*8, intent(in) :: a, b, c, lower_bound, upper_bound
         real*8 :: find_roots
@@ -296,7 +296,7 @@ module Dumbbell_util
 
     end function find_roots
 
-    function find_roots_cubic_newton(a, b, c, lower_bound, upper_bound, initial_guess)
+    pure function find_roots_cubic_newton(a, b, c, lower_bound, upper_bound, initial_guess)
         real*8, intent(in) :: a, b, c, lower_bound, upper_bound, initial_guess
         real*8 :: find_roots_cubic_newton
         real*8 :: x0, x1
@@ -313,16 +313,16 @@ module Dumbbell_util
                 x0 = x1
             end if
         end do
-        print *, "didn't find root, final guess is ", x1
+        !print *, "didn't find root, final guess is ", x1
         find_roots_cubic_newton = x1
     end function
 
-    function find_roots_quad(a, b, c, lower_bound, upper_bound)
+    pure function find_roots_quad(a, b, c, lower_bound, upper_bound)
         implicit none
         real(quad), intent(in) :: a, b, c, lower_bound, upper_bound
         real*8 :: find_roots_quad
         real(quad) :: Q, R, theta, x
-        integer :: i, iter
+        integer :: i
 
         Q = (a**2 - 3.Q0*b)/9.Q0
         R = (2.Q0*a**3 - 9.Q0*a*b + 27.Q0*c)/54.Q0
@@ -341,6 +341,214 @@ module Dumbbell_util
        !print *, "Did not get a root, a=", a, " b=", b, " c=", c
        !print *, R, Q
 
+    end function
+
+    function generate_lookup_table(beta, Q0, alpha, Nsteps)
+        implicit none
+        real(quad), intent(in) :: beta, Q0, alpha
+        integer, intent(in) :: Nsteps
+        integer :: i
+        real*8, dimension(:, :), allocatable :: generate_lookup_table
+        real(quad) :: step
+        real(quad), dimension(:), allocatable :: Y
+
+        allocate(Y(1:2*Nsteps), generate_lookup_table(1:2*Nsteps, 2))
+
+        step = 20.Q0*sqrt(alpha)/(real(Nsteps,kind=quad)-1.Q0)
+
+!        print *, step
+
+        Y(1:Nsteps) = (/((Q0-10.Q0*sqrt(alpha)+(real(i,kind=quad)-1.Q0)*step),i=1,Nsteps)/)
+
+        step = (log10(10000.Q0*sqrt(alpha)+10.Q0*Q0)-log10(10.Q0*sqrt(alpha)+Q0+step))/(real(Nsteps,kind=quad)-1.Q0)
+
+        !print *, step
+
+        Y(Nsteps+1:2*Nsteps) = (/((log10(10.Q0*sqrt(alpha)+Q0+step)+(real(i,kind=quad)-1.Q0)*step),i=1,Nsteps)/)
+        Y(Nsteps+1:2*Nsteps) = 10**(Y(Nsteps+1:2*Nsteps))
+
+        !print *, Y
+
+        do i=1,size(Y)
+!            print *, i
+!            print *, Y(i)
+            generate_lookup_table(i, 2) = find_roots_quad(-(2.Q0*Q0+Y(i)), &
+                               -(alpha-Q0**2-2.Q0*Y(i)*Q0+beta), &
+                               (beta*Q0+Y(i)*alpha-Y(i)*Q0**2), &
+                               Q0-sqrt(alpha), Q0+sqrt(alpha))
+!            print *, generate_lookup_table(i,2)
+
+!            generate_lookup_table(i, 2) = find_roots_quad(real(-(2.D0*Q0+Y(i)), kind=quad), &
+!                               real(-(alpha-Q0**2-2.D0*Y(i)*Q0+dt*alpha/2.D0), kind=quad), &
+!                               real((dt*alpha/2.D0*Q0+Y(i)*alpha-Y(i)*Q0**2), kind=quad), &
+!                               real(Q0-sqrt(alpha), kind=quad), &
+!                               real(Q0+sqrt(alpha), kind=quad))
+!            print *, generate_lookup_table(i,2)
+        end do
+
+!        print *, i
+!        print *, size(Y)
+
+        generate_lookup_table(:, 1) = dble(Y)
+
+    end function
+
+    pure function locate(xvals, x, m)
+        implicit none
+        integer :: locate
+        real*8, intent(in) :: xvals(:), x
+        integer, intent(in) :: m
+        integer :: ju, jm, jl, n
+        ! Given a value x, return a value j such that x is (insofar as possible) centered in the subrange xvals(j..j+m-1)
+        ! The values in xvals must be monotonic ascending. The returned value is not less than 0, nor greater than n-1.
+
+        n = size(xvals)
+        jl = 1
+        ju = n
+
+        do while(ju-jl.gt.1)
+            jm = (ju+jl)/2
+            if (x.ge.xvals(jm)) then
+                jl = jm
+            else
+                ju=jm
+            end if
+        end do
+
+        locate = max(1, min(n-m, (jl-((m-2)/2))))
+
+    end function
+
+    function hunt(xvals, x, m, jguess)
+        implicit none
+        integer :: hunt
+        real*8, intent(in) :: xvals(:), x
+        integer, intent(in) :: m, jguess
+        integer :: ju, jm, jl, n, inc
+        ! Given a value x, return a value j such that x is (insofar as possible) centered in the subrange xvals(j..j+m-1)
+        ! The values in xvals must be monotonic ascending. The returned value is not less than 0, nor greater than n-1.
+
+        n = size(xvals)
+        inc = 1
+        jl = jguess
+        !Input guess not useful, go to bisection
+        if ((jl.lt.0).or.(jl.gt.n-1)) then
+            jl=0
+            ju=n-1
+        else
+            !hunt up
+            if (x.ge.xvals(jl)) then
+                do while(.true.)
+                    ju = jl + inc
+                    if (ju.ge.n-1) then
+                        ju = n-1
+                        EXIT
+                    elseif (x.lt.xvals(ju)) then
+                        exit
+                    else
+                        jl = ju
+                        inc = inc + 1
+                    end if
+                end do
+            !hunt down
+            else
+                do while(.true.)
+                    ju = jl - inc
+                    if (ju.le.0) then
+                        jl = 0
+                        EXIT
+                    elseif (x.ge.xvals(jl)) then
+                        exit
+                    else
+                        ju = jl
+                        inc = inc + 1
+                    end if
+                end do
+            end if
+        end if
+
+        !do bisection for final answer
+        do while(ju-jl > 1)
+            jm = (ju+jl)/2
+            if (x.ge.xvals(jm)) then
+                jl = jm
+            else
+                ju=jm
+            end if
+        end do
+
+        hunt = max(0, min(n-m, (jl-((m-2)/2))))
+
+    end function
+
+    pure function lin_interp_bs(xvals, yvals, x)
+        implicit none
+        real*8 :: lin_interp_bs
+        real*8, intent(in) :: xvals(:), yvals(:), x
+        integer :: j
+
+        j = locate(xvals, x, 2)
+        lin_interp_bs = yvals(j) + ((x-xvals(j))/(xvals(j+1)-xvals(j)))*(yvals(j+1)-yvals(j))
+    end function
+
+    function poly_interp_bs(xvals, yvals, x, mm)
+        implicit none
+        real*8 :: poly_interp_bs
+        real*8, intent(in) :: xvals(:), yvals(:), x
+        integer, intent(in) :: mm
+        integer :: j, i, m, ns
+        real*8 :: xa(mm), ya(mm), c(mm), d(mm), ho, hp, den, w, dy, dif, dift
+
+        j = locate(xvals, x, mm)
+!        print *, 'j=', j
+
+        do i=1,mm
+            xa(i) = xvals(j+i-1)
+            ya(i) = yvals(j+i-1)
+        end do
+
+        !find index ns of closest table entry, initialise values
+        dif = abs(x-xa(1))
+        do i=1,mm
+            dift = abs(x-xa(i))
+            if (dift.le.dif) then
+                ns = i
+                dif = dift
+            end if
+            c(i) = ya(i)
+            d(i) = ya(i)
+        end do
+!        print *, "xa values"
+!        print *, xa
+!
+!        print *, "ya values"
+!        print *, ya
+
+        !initial guess
+        poly_interp_bs = ya(ns)
+        ns = ns - 1
+
+        do m=1,mm-1
+            do i=1,mm-m
+                ho = xa(i) - x
+                hp = xa(i+m) - x
+                w = c(i+1) - d(i)
+                den = ho-hp
+                if (den.eq.0.D0) then
+                    print *, "den == 0"
+                end if
+                den = w/den
+                d(i) = hp*den
+                c(i) = ho*den
+            end do
+            dy = 2.D0*dble(ns-1)+1.D0
+            if (dy.lt.(mm-m)) then
+                poly_interp_bs = poly_interp_bs + c(ns+1)
+            else
+                poly_interp_bs = poly_interp_bs + d(ns)
+                ns = ns - 1
+            end if
+        end do
     end function
 
     function find_Y_range(beta, Q0, alpha)

@@ -19,10 +19,29 @@ Program Dumbbell_Validation_tests
 
         print *, "Running unit tests"
 
-        call unit_test_find_roots_single()
+        !call unit_test_find_roots_single()
         !call unit_test_find_roots_multiple()
         !call unit_test_find_Y_range()
+        !call unit_test_generate_lookup_range()
+        !call unit_test_roots_speed()
+        !call unit_test_locate()
+        !call unit_test_root_finding()
         print *, ""
+
+    end subroutine
+
+    subroutine unit_test_generate_lookup_range()
+        implicit none
+        real(quad) :: alpha, dt, Q0
+        real*8, dimension(2000, 2) :: table
+
+        dt = 0.01Q0
+        alpha = 0.01Q0
+        Q0 = 100.Q0
+
+        table = generate_lookup_table(dt*alpha/4.Q0, Q0, alpha, 1000)
+
+        !print *, table
 
     end subroutine
 
@@ -41,16 +60,265 @@ Program Dumbbell_Validation_tests
 
     end subroutine
 
+    subroutine unit_test_locate()
+        implicit none
+        real*8 :: xvals(10), x, yvals(10)
+        integer :: j
+
+        xvals = (/1, 2, 3, 4, 5, 6, 7, 8, 9, 10/)
+        yvals = xvals**2
+        x = 4.6
+
+        j = locate(xvals, x, 2)
+        call assertEquals(4, j, "j!=4")
+
+        j = locate(xvals, x, 3)
+        call assertEquals(4, j, char(j))
+
+        j = locate(xvals, 1.1D0, 4)
+        call assertEquals(1, j)
+
+        j = locate(xvals, 10.D0, 4)
+        call assertEquals(6, j)
+
+        j = locate(xvals, 5123.D0, 4)
+        call assertEquals(6, j)
+
+        j = locate(xvals, -423.D0, 4)
+        call assertEquals(1, j)
+
+        x = lin_interp_bs(xvals, yvals, 2.5D0)
+        call assertEquals(6.5D0, x, 1D-8)
+
+        x = poly_interp_bs(xvals, yvals, 2.1D0, 3)
+        call assertEquals(2.1D0**2, x, 1D-8)
+
+        x = poly_interp_bs(xvals, yvals, 5.6D0, 3)
+        call assertEquals(5.6D0**2, x, 1D-8)
+
+        x = poly_interp_bs(xvals, yvals, 11.D0, 3)
+        call assertEquals(11.D0**2, x, 1D-8)
+
+        x = poly_interp_bs(xvals, yvals, 0.5D0, 3)
+        call assertEquals(0.5D0**2, x, 1D-8)
+
+        x = lin_interp_bs(xvals, yvals, 5.5D0)
+        call assertNotEquals(5.5D0**2, x, 1D-8)
+
+        call assertEquals(lin_interp_bs(xvals,yvals, 5.41D0), poly_interp_bs(xvals, yvals, 5.41D0, 2), 1D-8)
+
+        yvals = xvals**5
+
+        x = poly_interp_bs(xvals, yvals, 1.1D0, 6)
+        call assertEquals(1.1D0**5, x, 1D-8)
+
+        yvals = xvals**3
+
+        x = poly_interp_bs(xvals, yvals, 0.9D0, 4)
+        call assertEquals(0.9D0**3, x, 1D-8)
+
+    end subroutine
+
+    subroutine unit_test_root_finding()
+        implicit none
+        real*8 :: dt, alpha, Q0, Y, start_time, stop_time, storage(1), dummy(100000)
+        real*8 :: roots_i(10), roots_c(10), Qval_test
+        real*8, dimension(:, :), allocatable :: storage_vals
+        real*8, dimension(:), allocatable :: Yvals, Qvals
+        integer :: Nvals, i
+        integer*8 :: seed
+        real(kind=quad) :: dtq, alphaq, Q0q
+
+        Nvals = 201
+        allocate(Yvals(2*Nvals), Qvals(2*Nvals), storage_vals(2*Nvals, 2))
+
+        Q0 = 100.D0
+        alpha = 1.D0
+        dt = 0.01D0
+
+        Q0q = 100.Q0
+        alphaq = 1.Q0
+        dtq = 0.01Q0
+
+        storage_vals = generate_lookup_table(dtq, Q0q, alphaq, Nvals)
+        Yvals = storage_vals(:,1)
+        Qvals = storage_vals(:,2)
+        print *, size(Yvals)
+        print *, Yvals
+        print *, size(Qvals)
+        print *, Qvals
+
+
+        Y = 90.D0
+        Qval_test = find_roots_quad(real(-(2.D0*Q0+Y), kind=quad), &
+                               real(-(alpha-Q0**2-2.D0*Y*Q0+dt*alpha/2.D0), kind=quad), &
+                               real((dt*alpha/2.D0*Q0+Y*alpha-Y*Q0**2), kind=quad), &
+                               real(Q0-sqrt(alpha), kind=quad), &
+                               real(Q0+sqrt(alpha), kind=quad))
+
+        call assertEquals(Qval_test, Qvals(1), 1D-8)
+
+        Y = 195.503174072303D0
+        Qval_test = find_roots_quad(real(-(2.D0*Q0+Y), kind=quad), &
+                               real(-(alpha-Q0**2-2.D0*Y*Q0+dt*alpha/2.D0), kind=quad), &
+                               real((dt*alpha/2.D0*Q0+Y*alpha-Y*Q0**2), kind=quad), &
+                               real(Q0-sqrt(alpha), kind=quad), &
+                               real(Q0+sqrt(alpha), kind=quad))
+
+        call assertEquals(Qval_test, Qvals(11), 1D-8)
+
+
+
+    end subroutine
+
+    subroutine unit_test_roots_speed()
+        implicit none
+        real*8 :: dt, alpha, Q0, Y, start_time, stop_time, storage(1), dummy(100000)
+        real*8 :: roots_i(10), roots_c(10)
+        real*8, dimension(:, :), allocatable :: storage_vals
+        real*8, dimension(:), allocatable :: Yvals, Qvals
+        integer :: Nvals, i
+        integer*8 :: seed
+        real(kind=quad) :: dtq, alphaq, Q0q
+
+        seed = 1231234321298
+
+        Nvals = 1000001
+        allocate(Yvals(2*Nvals), Qvals(2*Nvals), storage_vals(2*Nvals, 2))
+
+        Q0 = 100.D0
+        alpha = 0.0001D0
+        dt = 0.01D0
+
+        Q0q = 100.Q0
+        alphaq = 0.0001Q0
+        dtq = 0.01Q0
+
+        !Lookup table generation time
+        call cpu_time(start_time)
+        storage_vals = generate_lookup_table(dtq, Q0q, alphaq, Nvals)
+        Yvals = storage_vals(:,1)
+        Qvals = storage_vals(:,2)
+        print *, size(Yvals)
+        print *, size(Qvals)
+
+        do i=1,size(Yvals)
+!            print *, "Yval = ", Yvals(i)
+!            print *, "Qval = ", Qvals(i)
+
+            Qvals(i) = find_roots_quad(real(-(2.D0*Q0+Yvals(i)), kind=quad), &
+                               real(-(alpha-Q0**2-2.D0*Yvals(i)*Q0+dt*alpha/2.D0), kind=quad), &
+                               real((dt*alpha/2.D0*Q0+Yvals(i)*alpha-Yvals(i)*Q0**2), kind=quad), &
+                               real(Q0-sqrt(alpha), kind=quad), &
+                               real(Q0+sqrt(alpha), kind=quad))
+
+!            print *, "Qval(new) = ", Qvals(i)
+        end do
+
+        call cpu_time(stop_time)
+        print *, "Run time for generating values:", &
+                stop_time - start_time, "seconds"
+
+!        !First set
+!        call cpu_time(start_time)
+!        do i=1,size(dummy)
+!            storage = rand_floats(seed, 1)
+!            Y = storage(1)*2.D0*sqrt(alpha)+Q0
+!            dummy(i) = lin_interp_bs(Yvals, Qvals, Y)
+!        end do
+!        print *, dummy(5)
+!
+!        call cpu_time(stop_time)
+!        print *, "Run time for lookup solver:", &
+!                stop_time - start_time, "seconds"
+!
+!        call cpu_time(start_time)
+!        do i=1,size(dummy)
+!            storage = rand_floats(seed, 1)
+!            Y = storage(1)*1000.D0*sqrt(alpha)+Q0
+!            dummy(i) = find_roots(-(2.D0*Q0+Y), &
+!                           -(alpha-Q0**2-2.D0*Y*Q0+dt/2.D0*alpha), &
+!                           (dt/2.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
+!                           Q0-sqrt(alpha), &
+!                           Q0+sqrt(alpha))
+!        end do
+!        print *, dummy(5)
+!
+!        call cpu_time(stop_time)
+!        print *, "Run time for cubic solver:", &
+!                stop_time - start_time, "seconds"
+!
+!        ! Second set
+!        call cpu_time(start_time)
+!        do i=1,size(dummy)
+!            storage = rand_floats(seed, 1)
+!            Y = storage(1)*2.D0*sqrt(alpha)+Q0
+!            dummy(i) = find_roots(-(2.D0*Q0+Y), &
+!                           -(alpha-Q0**2-2.D0*Y*Q0+dt/2.D0*alpha), &
+!                           (dt/2.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
+!                           Q0-sqrt(alpha), &
+!                           Q0+sqrt(alpha))
+!        end do
+!        print *, dummy(5)
+!
+!        call cpu_time(stop_time)
+!        print *, "Run time for cubic solver:", &
+!                stop_time - start_time, "seconds"
+!
+!        call cpu_time(start_time)
+!        do i=1,size(dummy)
+!            storage = rand_floats(seed, 1)
+!            Y = storage(1)*2.D0*sqrt(alpha)+Q0
+!            dummy(i) = lin_interp_bs(Yvals, Qvals, Y)
+!        end do
+!        print *, dummy(5)
+!
+!        call cpu_time(stop_time)
+!        print *, "Run time for lookup solver:", &
+!                stop_time - start_time, "seconds"
+
+        !actual unit tests
+        do i=1,size(roots_i)
+            storage = rand_floats(seed, 1)
+            Y = storage(1)*4.D0*sqrt(alpha)+Q0 - 2.D0*sqrt(alpha)
+            print *, "Y =", Y
+            roots_i(i) = poly_interp_bs(Yvals, Qvals, Y, 3)
+!            roots_c(i) = find_roots(-(2.D0*Q0+Y), &
+!                           -(alpha-Q0**2-2.D0*Y*Q0+dt/2.D0*alpha), &
+!                           (dt/2.D0*alpha*Q0+Y*alpha-Y*Q0**2), &
+!                           Q0-sqrt(alpha), &
+!                           Q0+sqrt(alpha))
+            roots_c(i) = find_roots_quad(real(-(2.D0*Q0+Y), kind=quad), &
+                               real(-(alpha-Q0**2-2.D0*Y*Q0+dt*alpha/2.D0), kind=quad), &
+                               real((dt*alpha/2.D0*Q0+Y*alpha-Y*Q0**2), kind=quad), &
+                               real(Q0-sqrt(alpha), kind=quad), &
+                               real(Q0+sqrt(alpha), kind=quad))
+            print *, "interp_roots =", roots_i(i)
+            print *, "cubic_roots =", roots_c(i)
+        end do
+
+        print *, find_roots_quad(real(-(2.D0*Q0+100.004679046790D0), kind=quad), &
+                               real(-(alpha-Q0**2-2.D0*100.004679046790D0*Q0+dt*alpha/2.D0), kind=quad), &
+                               real((dt*alpha/2.D0*Q0+100.004679046790D0*alpha-100.004679046790D0*Q0**2), kind=quad), &
+                               real(Q0-sqrt(alpha), kind=quad), &
+                               real(Q0+sqrt(alpha), kind=quad))
+
+        print *, 100.004655705654
+        print *, 100.004652852995
+
+        call assertEquals(roots_i, roots_c, size(roots_i), 1D-8)
+
+    end subroutine
+
     subroutine unit_test_find_roots_single()
         implicit none
         real*8 :: Q0, Y, alpha, dt, duble, quadz, newtonbby
-        integer*8 :: i
         character(len=256) :: output
 
-        Q0 = 1.D0
+        Q0 = 100.D0
         alpha = 1.D-6
         dt = 0.01D0
-        Y = 100.D0
+        Y = 1000.D0
 
         duble = find_roots(-(2.D0*Q0+Y), &
                            -(alpha-Q0**2-2.D0*Y*Q0+dt/4.D0*alpha), &
@@ -161,8 +429,9 @@ Program Dumbbell_Validation_tests
 !        call test_semimp_euler_equal(0.005D0, 100, 100000)
         !call test_FENE_HI_shear_semimp_vs_Kailash_code(0.005D0, 2000, 10000)
         !call test_FF_zero_shear_viscosity(0.01D0, 2000, 100000)
-        call test_FF_same_values_two_methods(0.01D0, 0.01D0, 5, 1000000)
+        !call test_FF_same_values_two_methods(0.001D0, 0.001D0, 5, 1000000)
         !call test_high_shear_Y_range(0.01D0, 10, 10)
+        call test_lookup_method(0.001D0, 5000, 1000000)
 
         !p-test on likelihood of k or more 'failures' in n trials
         call get_failed_count(k)
@@ -180,11 +449,109 @@ Program Dumbbell_Validation_tests
 
     end subroutine
 
+    subroutine test_lookup_method(dt, Nsteps, Ntraj)
+        implicit none
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i
+        real*8 :: start_time, stop_time, alpha, h, a, sr, Q0, eta_ana, psi_ana, Q2_ana
+        type(measured_variables) out_var
+        real*8, dimension(3) :: dW
+        real*8, dimension(3,3) :: k
+        !large arrays must be declared allocatable so they go into heap, otherwise
+        !OpenMP threads run out of memory
+        real*8, dimension(:, :), allocatable :: Q, Q_eq_VR, storage_vals
+        real*8, dimension(:), allocatable :: Yvals, Qvals
+        integer :: Nvals
+
+        Nvals = 1001
+
+        call date_and_time(values=time)
+        seed = time(8)*100 + time(7)*10
+
+        allocate(Q(3,1:Ntraj), Q_eq_VR(3,1:Ntraj))
+        allocate(Yvals(2*Nvals), Qvals(2*Nvals), storage_vals(2*Nvals, 2))
+
+        k(:,:) = 0.D0
+
+        sr = 0.D0
+
+        Q0 = 5.D0
+        alpha = 0.1D0
+        h = 0.D0
+        a = sqrt(PI)*h
+
+        print *, "Correct zero-shear (sr=", sr, ") viscosity for FF dumbbells"
+
+        Q = generate_Q_FF(Q0, alpha, Ntraj, seed, 10000)
+        Q_eq_VR = Q
+
+        call cpu_time(start_time)
+        !$ start_time = omp_get_wtime()
+
+        storage_vals = generate_lookup_table(real(dt*alpha/4.D0,kind=quad), real(Q0, kind=quad), real(alpha, kind=quad), Nvals)
+        Yvals = storage_vals(:,1)
+        Qvals = storage_vals(:,2)
+
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, out_var)
+        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
+        do steps = 1,Nsteps
+            !$OMP DO
+            do i = 1,Ntraj
+                dW = Wiener_step(seed, dt)
+                k(1,2) = sr
+                Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW, Yvals, Qvals)
+                k(1,2) = 0.D0
+                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW, Yvals, Qvals)
+            end do
+            !$OMP END DO
+
+        end do
+        ! Measurement
+        call measure_shear_with_VR(out_var, Q, Q_eq_VR, Q0, alpha, sr, Ntraj)
+        !$OMP END parallel
+
+        call cpu_time(stop_time)
+        !$ stop_time = omp_get_wtime()
+        print *, "Run time:", &
+                stop_time - start_time, "seconds"
+
+        Q2_ana = (((3.D0*alpha)/(alpha+5.D0)+6.D0*Q0**2)*(alpha/(alpha+3.D0))+Q0**4)/&
+                  (alpha/(alpha+3.D0)+Q0**2)
+
+        eta_ana = (1.D0/3.D0)*Q2_ana
+
+        psi_ana = (1.D0/15.D0)*((((5.D0*alpha)/(alpha+7.D0)+15.D0*Q0**2)*&
+                  (3.D0*alpha)/(alpha+5.D0)+15.D0*Q0**4)*(alpha/(alpha+3.D0))+Q0**6)/&
+                  (alpha/(alpha+3.D0)+Q0**2)
+
+        print *, "Q_ana = ", sqrt(Q2_ana)
+        print *, "eta_analytical = ", eta_ana
+        print *, "psi_analytical = ", psi_ana
+        print *, "Qavg = ", out_var%Qavg
+        print *, "Aeta = ", out_var%Aeta
+        print *, "Apsi = ", out_var%Apsi
+        print *, "Qavg-sqrt(Q^2)_0 = " , out_var%Qavg-sqrt(Q2_ana), " +- ", out_var%Vqavg
+        print *, "Aeta-eta_0 = ", (out_var%Aeta-eta_ana), " +- ", out_var%Veta
+        print *, "Apsi-psi_0 = ", (out_var%Apsi-psi_ana), " +- ", out_var%Vpsi
+
+        !Check that both Qavg and S are within acceptable range
+        call assertEquals(sqrt(Q2_ana), out_var%Qavg, out_var%Vqavg*2.D0, &
+                          "Qavg != sqrt(Q^2)_analytical for sr=0.001 FF dumbbell")
+        call assertEquals(eta_ana, out_var%Aeta, out_var%Veta*2.D0, &
+                          "Aeta != eta_analytical for sr=0.001 FF dumbbell")
+        call assertEquals(psi_ana, out_var%Apsi, out_var%Vpsi*2.D0, &
+                          "Apsi != psi_analytical for sr=0.001 FF dumbbell")
+
+        print *, ""
+
+    end subroutine
+
     subroutine test_high_shear_Y_range(dt, Nsteps, Ntraj)
         implicit none
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
-        integer*8 :: steps, time(1:8), seed, i, s
+        integer*8 :: steps, time(1:8), seed, i
         real*8 :: start_time, stop_time, alpha, h, a, sr, Q0, eta_ana, psi_ana, Q2_ana
         real*8 :: YMinMax(2), Ymin, Ymax
         type(measured_variables) out_var
@@ -279,7 +646,7 @@ Program Dumbbell_Validation_tests
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3)
+        real*8 :: start_time, stop_time, dW(3), k(3,3)
         type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
@@ -340,7 +707,7 @@ Program Dumbbell_Validation_tests
         integer*8, intent(in) :: Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i, Nsteps
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3)
+        real*8 :: start_time, stop_time, sr, dW(3), k(3,3)
         type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
@@ -405,7 +772,7 @@ Program Dumbbell_Validation_tests
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3), h, a
+        real*8 :: start_time, stop_time, sr, dW(3), k(3,3), h, a
         type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
@@ -469,7 +836,7 @@ Program Dumbbell_Validation_tests
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3), b
+        real*8 :: start_time, stop_time, dW(3), k(3,3), b
         type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
@@ -565,7 +932,7 @@ Program Dumbbell_Validation_tests
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
         integer*8 :: steps, time(1:8), seed, i
-        real*8 :: Ql, Ql2, start_time, stop_time, sr, dW(3), k(3,3), h, a
+        real*8 :: start_time, stop_time, sr, dW(3), k(3,3), h, a
         type(measured_variables) Vsemimp, Veuler
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
@@ -727,7 +1094,7 @@ Program Dumbbell_Validation_tests
         implicit none
         integer*8, intent(in) :: Nsteps, Ntraj
         real*8, intent(in) :: dt
-        integer*8 :: steps, time(1:8), seed, i, s
+        integer*8 :: steps, time(1:8), seed, i
         real*8 :: start_time, stop_time, alpha, h, a, sr, Q0, eta_ana, psi_ana, Q2_ana
         type(measured_variables) out_var
         real*8, dimension(3) :: dW
@@ -816,7 +1183,7 @@ Program Dumbbell_Validation_tests
         implicit none
         integer*8, intent(in) :: runtime, Ntraj
         real*8, intent(in) :: dtnew, dtold
-        integer*8 :: steps, time(1:8), seed, i, s, Nsteps
+        integer*8 :: steps, time(1:8), seed, i, Nsteps
         real*8 :: start_time, stop_time, alpha, h, a, sr, Q0, dt, Q2_ana
         type(measured_variables) out_var_old, out_var_new
         real*8, dimension(3) :: dW
@@ -832,7 +1199,7 @@ Program Dumbbell_Validation_tests
 
         k(:,:) = 0.D0
 
-        sr = 1.D0
+        sr = 0.D0
 
         Q0 = 5.D0
         alpha = 0.1D0

@@ -82,7 +82,7 @@ module Generate_Initial_Conditions
         real*8, dimension(:), intent(in) :: x, fx
         real*8, intent(in) :: fxval
         real*8 :: inverse_lin_interp
-        integer :: i, j
+        integer :: i
 
         do i=1,size(x)
             if (fx(i) > fxval) then

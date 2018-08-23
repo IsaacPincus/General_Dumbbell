@@ -8,18 +8,19 @@ module Integrate
         module procedure step_semimp_FF_old
         module procedure step_Euler_Hookean
         module procedure step_semimp_FF_Y_test
+        module procedure step_semimp_FF_lookup
     end interface
 
     contains
 
-    function construct_B_ROB(Q, a)
+    pure function construct_B_ROB(Q, a)
         implicit none
         real*8, intent(in) :: Q(3), a
         real*8, dimension(3,3) :: construct_B_ROB
         real*8 :: Ql, aux, g, g_til, Ql2, Ql4, Ql6, a2, a4
-        real*8, save :: C43 = 4.D0/3.D0
-        real*8, save :: C83 = 8.D0/3.D0
-        real*8, save :: C143 = 14.D0/3.D0
+        real*8, parameter :: C43 = 4.D0/3.D0
+        real*8, parameter :: C83 = 8.D0/3.D0
+        real*8, parameter :: C143 = 14.D0/3.D0
 
         a2 = a**2
         a4 = a2**2
@@ -37,15 +38,15 @@ module Integrate
 
     end function construct_B_ROB
 
-    function construct_B_RPY(Q, a)
+    pure function construct_B_RPY(Q, a)
         implicit none
         real*8, intent(in) :: Q(3), a
         real*8, dimension(3,3) :: construct_B_RPY
-        real*8 :: Ql, aux, g, g_til, Ql2, Ql4, Ql6, a2, Atmp, Btmp, temp
-        real*8, save :: C43 = 4.D0/3.D0
-        real*8, save :: C38 = 3.D0/8.D0
-        real*8, save :: C18 = 1.D0/8.D0
-        real*8, save :: C23 = 2.D0/3.D0
+        real*8 :: Ql, aux, g, g_til, Ql2, a2, Atmp, Btmp, temp
+        real*8, parameter :: C43 = 4.D0/3.D0
+        real*8, parameter :: C38 = 3.D0/8.D0
+        real*8, parameter :: C18 = 1.D0/8.D0
+        real*8, parameter :: C23 = 2.D0/3.D0
 
         a2 = a**2
 
@@ -72,8 +73,6 @@ module Integrate
         implicit none
         real*8, intent(in) :: Q(3), dt, a, dW(3)
         real*8, intent(in) :: k(3,3)
-        real*8 :: Ql
-        real*8, dimension(3) :: F
         real*8, dimension(3,3) :: B, BdotB
         real*8, dimension(3) :: step_Euler_Hookean
 
@@ -86,13 +85,47 @@ module Integrate
 
     end function
 
-    function step_semimp_FF(Q, k, dt, Q0, alpha, a, dW)
+    function step_semimp_FF_lookup(Q, k, dt, Q0, alpha, a, dW, Yvals, Qvals)
+        implicit none
+        real*8, intent(in) :: Q(3), dt, Q0, alpha, a, dW(3), Yvals(:), Qvals(:)
+        real*8, intent(in) :: k(3,3)
+        real*8 :: Ql, Y, Qlength
+        real*8, dimension(3) :: F, RHS
+        real*8, dimension(3,3) :: B1, B1B1
+        real*8, dimension(3) :: step_semimp_FF_lookup
+        integer :: n
+
+        n = size(Yvals)
+
+        Ql = sqrt(Q(1)**2 + Q(2)**2 + Q(3)**2)
+        F = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/alpha)*Q/Ql
+
+        B1 = construct_B_RPY(Q, a)
+
+        B1B1 = matmul(B1,B1)
+
+        RHS = Q + 0.5D0*(ten_vec_dot(k,2.D0*Q) - ten_vec_dot(B1B1,F) + 0.5D0*F)*dt + ten_vec_dot(B1,dW)
+        Y =  sqrt(RHS(1)**2 + RHS(2)**2 + RHS(3)**2)
+
+        if (Y.lt.Yvals(1)) then
+            Qlength = Qvals(1)
+        elseif (Y.gt.Yvals(n)) then
+            Qlength = Qvals(n)
+        else
+            Qlength = poly_interp_bs(Yvals, Qvals, Y, 4)
+        end if
+
+        step_semimp_FF_lookup = RHS*Qlength/Y
+
+    end function
+
+    pure function step_semimp_FF(Q, k, dt, Q0, alpha, a, dW)
         implicit none
         real*8, intent(in) :: Q(3), dt, Q0, alpha, a, dW(3)
         real*8, intent(in) :: k(3,3)
-        real*8 :: Ql, L, RdotB2_L, Qlength, temp_R1, temp_R2, Q_test
-        real*8, dimension(3) :: F, u, RHS, Qpred, RdotB2
-        real*8, dimension(3,3) :: B1, B2, B1B1, B2B2
+        real*8 :: Ql, L, Qlength
+        real*8, dimension(3) :: F, u, RHS, Qpred
+        real*8, dimension(3,3) :: B1, B1B1
         real*8, dimension(3) :: step_semimp_FF
 !        integer*8, save :: failure_count = 0
 !        integer*8, save :: iter_count = 0
@@ -170,9 +203,9 @@ module Integrate
         implicit none
         real*8, intent(in) :: Q(3), dt, Q0, alpha, a, dW(3), Ymin, Ymax
         real*8, intent(in) :: k(3,3)
-        real*8 :: Ql, RdotB2_L, Qlength, temp_R1, temp_R2, Q_test, Y
+        real*8 :: Ql, RdotB2_L, Qlength, Q_test, Y
         real*8, dimension(3) :: F, u, RHS, Qpred, RdotB2
-        real*8, dimension(3,3) :: B1, B2, B1B1, B2B2
+        real*8, dimension(3,3) :: B1, B1B1
         real*8, dimension(3) :: step_semimp_FF_Y_test
 
 
@@ -239,13 +272,13 @@ module Integrate
 
     end function
 
-    function step_semimp_FF_old(Q, k, dt, Q0, alpha, a, dW, dummy)
+    pure function step_semimp_FF_old(Q, k, dt, Q0, alpha, a, dW, dummy)
         implicit none
         real*8, intent(in) :: Q(3), dt, Q0, alpha, a, dW(3), dummy
         real*8, intent(in) :: k(3,3)
-        real*8 :: Ql, L, RdotB2_L, Qlength, temp_R1, temp_R2, Q_test
+        real*8 :: Ql, L, RdotB2_L, Qlength
         real*8, dimension(3) :: F, u, RHS, Qpred, RdotB2
-        real*8, dimension(3,3) :: B1, B2, B1B1, B2B2
+        real*8, dimension(3,3) :: B1, B1B1
         real*8, dimension(3) :: step_semimp_FF_old
 
         Ql = sqrt(Q(1)**2 + Q(2)**2 + Q(3)**2)
