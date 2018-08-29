@@ -1,5 +1,4 @@
 module Dumbbell_util
-
     implicit none
     integer, parameter :: quad = SELECTED_REAL_KIND(32)
     real*8, parameter :: PI = 4.D0*atan(1.0D0)
@@ -296,27 +295,6 @@ module Dumbbell_util
 
     end function find_roots
 
-    pure function find_roots_cubic_newton(a, b, c, lower_bound, upper_bound, initial_guess)
-        real*8, intent(in) :: a, b, c, lower_bound, upper_bound, initial_guess
-        real*8 :: find_roots_cubic_newton
-        real*8 :: x0, x1
-        real*8, parameter :: exit_err = 1.D-10
-        integer :: i
-
-        x0 = initial_guess
-        do i=1,50
-            x1 = x0-(x0**3+a*x0**2+b*x0+c)/(3.D0*x0**2+2.D0*a*x0+b)
-            if (((abs(x1-x0)).lt.exit_err).and.((x1.le.(upper_bound+1.D-8)).and.(x1.ge.(lower_bound-1.D-8)))) then
-                find_roots_cubic_newton = x1
-                return
-            else
-                x0 = x1
-            end if
-        end do
-        !print *, "didn't find root, final guess is ", x1
-        find_roots_cubic_newton = x1
-    end function
-
     pure function find_roots_quad(a, b, c, lower_bound, upper_bound)
         implicit none
         real(quad), intent(in) :: a, b, c, lower_bound, upper_bound
@@ -327,19 +305,14 @@ module Dumbbell_util
         Q = (a**2 - 3.Q0*b)/9.Q0
         R = (2.Q0*a**3 - 9.Q0*a*b + 27.Q0*c)/54.Q0
 
-        !iter = 0
         theta = acos(R/sqrt(Q**3))
         do i=-1,1
-            !iter = iter+1
             x = -2.Q0*sqrt(Q)*cos((theta + real(i, kind=quad)*PI*2.Q0)/3.Q0)-a/3.Q0
-            !print *, "iter = ", iter, "root = ", x
             if ((x.ge.lower_bound).and.(x.le.upper_bound)) then
                 find_roots_quad = dble(x)
                 return
             end if
         end do
-       !print *, "Did not get a root, a=", a, " b=", b, " c=", c
-       !print *, R, Q
 
     end function
 
@@ -356,51 +329,33 @@ module Dumbbell_util
 
         step = 20.Q0*sqrt(alpha)/(real(Nsteps,kind=quad)-1.Q0)
 
-!        print *, step
-
         Y(1:Nsteps) = (/((Q0-10.Q0*sqrt(alpha)+(real(i,kind=quad)-1.Q0)*step),i=1,Nsteps)/)
 
         step = (log10(10000.Q0*sqrt(alpha)+10.Q0*Q0)-log10(10.Q0*sqrt(alpha)+Q0+step))/(real(Nsteps,kind=quad)-1.Q0)
 
-        !print *, step
-
         Y(Nsteps+1:2*Nsteps) = (/((log10(10.Q0*sqrt(alpha)+Q0+step)+(real(i,kind=quad)-1.Q0)*step),i=1,Nsteps)/)
         Y(Nsteps+1:2*Nsteps) = 10**(Y(Nsteps+1:2*Nsteps))
 
-        !print *, Y
-
         do i=1,size(Y)
-!            print *, i
-!            print *, Y(i)
             generate_lookup_table(i, 2) = find_roots_quad(-(2.Q0*Q0+Y(i)), &
                                -(alpha-Q0**2-2.Q0*Y(i)*Q0+beta), &
                                (beta*Q0+Y(i)*alpha-Y(i)*Q0**2), &
                                Q0-sqrt(alpha), Q0+sqrt(alpha))
-!            print *, generate_lookup_table(i,2)
-
-!            generate_lookup_table(i, 2) = find_roots_quad(real(-(2.D0*Q0+Y(i)), kind=quad), &
-!                               real(-(alpha-Q0**2-2.D0*Y(i)*Q0+dt*alpha/2.D0), kind=quad), &
-!                               real((dt*alpha/2.D0*Q0+Y(i)*alpha-Y(i)*Q0**2), kind=quad), &
-!                               real(Q0-sqrt(alpha), kind=quad), &
-!                               real(Q0+sqrt(alpha), kind=quad))
-!            print *, generate_lookup_table(i,2)
         end do
-
-!        print *, i
-!        print *, size(Y)
 
         generate_lookup_table(:, 1) = dble(Y)
 
     end function
 
     pure function locate(xvals, x, m)
+        ! Given a value x, return a value j such that x is (insofar as possible) centered in the subrange xvals(j..j+m-1)
+        ! The values in xvals must be monotonic ascending. The returned value is not less than 0, nor greater than n-1.
         implicit none
         integer :: locate
         real*8, intent(in) :: xvals(:), x
         integer, intent(in) :: m
         integer :: ju, jm, jl, n
-        ! Given a value x, return a value j such that x is (insofar as possible) centered in the subrange xvals(j..j+m-1)
-        ! The values in xvals must be monotonic ascending. The returned value is not less than 0, nor greater than n-1.
+
 
         n = size(xvals)
         jl = 1
@@ -500,7 +455,6 @@ module Dumbbell_util
         real*8 :: xa(mm), ya(mm), c(mm), d(mm), ho, hp, den, w, dy, dif, dift
 
         j = locate(xvals, x, mm)
-!        print *, 'j=', j
 
         do i=1,mm
             xa(i) = xvals(j+i-1)
@@ -518,11 +472,6 @@ module Dumbbell_util
             c(i) = ya(i)
             d(i) = ya(i)
         end do
-!        print *, "xa values"
-!        print *, xa
-!
-!        print *, "ya values"
-!        print *, ya
 
         !initial guess
         poly_interp_bs = ya(ns)
@@ -534,9 +483,6 @@ module Dumbbell_util
                 hp = xa(i+m) - x
                 w = c(i+1) - d(i)
                 den = ho-hp
-                if (den.eq.0.D0) then
-                    print *, "den == 0"
-                end if
                 den = w/den
                 d(i) = hp*den
                 c(i) = ho*den
@@ -549,57 +495,6 @@ module Dumbbell_util
                 ns = ns - 1
             end if
         end do
-    end function
-
-    function find_Y_range(beta, Q0, alpha)
-        implicit none
-        real*8, intent(in) :: beta, Q0, alpha
-        real*8 :: roots_dble, roots_quad, Ymin, Ymax, v1, v2, delta, tval
-        real*8, dimension(241) :: Y
-        logical :: first_success_passed
-        real*8, dimension(2) :: find_Y_range
-        integer :: i, n
-
-        Y = (/((dble(i)),i=-80,160)/)
-        Y = 10**(Y/20.D0)
-
-        Ymin = Y(1)
-        Ymax = Y(241)
-        delta = Q0*1.D-12
-        tval = 0.D0
-
-        first_success_passed = .false.
-
-        do n=1,size(Y)
-            roots_dble = find_roots(-(2.D0*Q0+Y(n)), &
-                               -(alpha-Q0**2-2.D0*Y(n)*Q0+beta), &
-                               (beta*Q0+Y(n)*alpha-Y(n)*Q0**2), &
-                               Q0-sqrt(alpha), &
-                               Q0+sqrt(alpha))
-            roots_quad = find_roots_quad(real(-(2.D0*Q0+Y(n)), kind=quad), &
-                               real(-(alpha-Q0**2-2.D0*Y(n)*Q0+beta), kind=quad), &
-                               real((beta*Q0+Y(n)*alpha-Y(n)*Q0**2), kind=quad), &
-                               real(Q0-sqrt(alpha), kind=quad), &
-                               real(Q0+sqrt(alpha), kind=quad))
-            v1 = roots_dble
-            v2 = roots_quad
-
-            if ((abs(v1 - v2) > delta).or.(v1.eq.tval).or.(v2.eq.tval)) then
-                if (first_success_passed) then
-                    Ymax = Y(n)
-                    EXIT
-                end if
-            else
-                if (.not.first_success_passed) then
-                    Ymin = Y(n)
-                    first_success_passed = .true.
-                end if
-            end if
-        end do
-
-        find_Y_range(1) = Ymin
-        find_Y_range(2) = Ymax
-
     end function
 
     pure function beta(x,y)
