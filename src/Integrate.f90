@@ -5,8 +5,10 @@ module Integrate
 
     interface step
         module procedure step_semimp_FF
+        module procedure step_semimp_FF_eq
         module procedure step_Euler_Hookean
         module procedure step_semimp_FF_lookup
+        module procedure step_semimp_FF_lookup_eq
     end interface
 
     contains
@@ -119,6 +121,39 @@ module Integrate
 
     end function
 
+    function step_semimp_FF_lookup_eq(Q, dt, sigma, alpha, a, dW, Yvals, Qvals)
+        implicit none
+        real*8, intent(in) :: Q(3), dt, sigma, alpha, a, dW(3), Yvals(:), Qvals(:)
+        real*8 :: Ql, Y, Qlength
+        real*8, dimension(3) :: F, RHS, Qpred
+        real*8, dimension(3,3) :: B1, B1B1
+        real*8, dimension(3) :: step_semimp_FF_lookup_eq
+        integer :: n
+
+        n = size(Yvals)
+
+        Ql = sqrt(Q(1)**2 + Q(2)**2 + Q(3)**2)
+        F = (Ql - sigma)/(1.0D0-(Ql-sigma)**2/alpha)*Q/Ql
+
+        B1 = construct_B_RPY(Q, a)
+
+        B1B1 = matmul(B1,B1)
+
+        RHS = Q + 0.5D0*(-ten_vec_dot(B1B1,F) + 0.5D0*F)*dt + ten_vec_dot(B1,dW)
+        Y =  sqrt(RHS(1)**2 + RHS(2)**2 + RHS(3)**2)
+
+        if (Y.lt.Yvals(1)) then
+            Qlength = Qvals(1)
+        elseif (Y.gt.Yvals(n)) then
+            Qlength = Qvals(n)
+        else
+            Qlength = poly_interp_bs(Yvals, Qvals, Y, 4)
+        end if
+
+        step_semimp_FF_lookup_eq = RHS*Qlength/Y
+
+    end function
+
     pure function step_semimp_FF(Q, k, dt, sigma, alpha, a, dW)
         implicit none
         real*8, intent(in) :: Q(3), dt, sigma, alpha, a, dW(3)
@@ -137,17 +172,44 @@ module Integrate
         Qpred = Q(:) + (ten_vec_dot(k,Q) - 0.5D0*ten_vec_dot(B1B1,F))*dt &
                   + ten_vec_dot(B1,dW)
 
-        RHS = Q + 0.5D0*(ten_vec_dot(k,Q+Qpred) - ten_vec_dot(B1B1,F) + F)*dt &
+        RHS = Q + 0.5D0*(ten_vec_dot(k,Q+Qpred) - ten_vec_dot(B1B1,F) + 0.5D0*F)*dt &
                 + ten_vec_dot(B1,dW)
 
         Y =  sqrt(RHS(1)**2 + RHS(2)**2 + RHS(3)**2)
         u = RHS/Y
 
-        Qlength = find_roots( -(2.D0*sigma+Y), -alpha+sigma**2-alpha*dt/2.D0+2.d0*Y*sigma, &
-                                alpha*dt/2.D0*sigma+Y*(alpha-sigma**2), sigma-sqrt(alpha), sigma+sqrt(alpha) )
+        Qlength = find_roots( -(2.D0*sigma+Y), -alpha+sigma**2-alpha*dt/4.D0+2.d0*Y*sigma, &
+                                alpha*dt/4.D0*sigma+Y*(alpha-sigma**2), sigma-sqrt(alpha), sigma+sqrt(alpha) )
 
         step_semimp_FF = RHS*Qlength/Y
 
     end function step_semimp_FF
+
+    pure function step_semimp_FF_eq(Q, dt, sigma, alpha, a, dW)
+        implicit none
+        real*8, intent(in) :: Q(3), dt, sigma, alpha, a, dW(3)
+        real*8 :: Ql, Y, Qlength
+        real*8, dimension(3) :: F, u, RHS, Qpred
+        real*8, dimension(3,3) :: B1, B1B1
+        real*8, dimension(3) :: step_semimp_FF_eq
+
+        Ql = sqrt(Q(1)**2 + Q(2)**2 + Q(3)**2)
+        F = (Ql - sigma)/(1.0D0-(Ql-sigma)**2/alpha)*Q/Ql
+
+        B1 = construct_B_RPY(Q, a)
+        B1B1 = matmul(B1,B1)
+
+        RHS = Q + 0.5D0*(-ten_vec_dot(B1B1,F) + 0.5D0*F)*dt + ten_vec_dot(B1,dW)
+
+        Y =  sqrt(RHS(1)**2 + RHS(2)**2 + RHS(3)**2)
+        u = RHS/Y
+
+        Qlength = find_roots( -(2.D0*sigma+Y), -alpha+sigma**2-alpha*dt/4.D0+2.d0*Y*sigma, &
+                                alpha*dt/4.D0*sigma+Y*(alpha-sigma**2), sigma-sqrt(alpha), sigma+sqrt(alpha) )
+
+        step_semimp_FF_eq = RHS*Qlength/Y
+
+
+    end function step_semimp_FF_eq
 
 end module

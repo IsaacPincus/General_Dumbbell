@@ -96,14 +96,14 @@ Program Dumbbell_Validation_tests
         print *, "Running Validation tests"
         print *, "We expect about 5% of tests to fail by chance, or ~1/20"
         print *, ""
-!        call test_eq_hookean_semimp(0.001D0, 5000, 100000)
-!        call test_Hookean_viscosity_semimp(0.001D0, 1000000)
-!        call test_Hookean_psi2_with_HI_semimp(0.001D0, 5000, 100000)
-!        call test_eq_FENE_semimp(0.001D0, 5000, 100000)
-!        call test_semimp_euler_equal(0.001D0, 500, 1000000)
-        call test_FENE_HI_shear_semimp_vs_Kailash_code(0.001D0, 3000, 100000)
-!        call test_FF_zero_shear_viscosity(0.002D0, 10000, 50000)
-!        call test_lookup_method(0.002D0, 10000, 50000)
+        call test_eq_hookean_semimp(0.001D0, 5000, 10000)
+        call test_Hookean_viscosity_semimp(0.001D0, 100000)
+        call test_Hookean_psi2_with_HI_semimp(0.001D0, 5000, 10000)
+        call test_eq_FENE_semimp(0.001D0, 5000, 10000)
+        call test_semimp_euler_equal(0.001D0, 500, 10000)
+        call test_FENE_HI_shear_semimp_vs_Kailash_code(0.001D0, 10000, 10000)
+        call test_FF_zero_shear_viscosity(0.002D0, 10000, 5000)
+        call test_lookup_method(0.01D0, 1000, 10000)
 
         !p-test on likelihood of k or more 'failures' in n trials
         call get_failed_count(k)
@@ -522,6 +522,7 @@ Program Dumbbell_Validation_tests
             sr = sr_vals(s)
             Q = generate_Q_FF(0.D0, b, Ntraj, seed, 10000)
             Q_eq_VR = Q
+            k(1,2) = sr
 
             !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, out_var)
             !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
@@ -529,10 +530,8 @@ Program Dumbbell_Validation_tests
                 !$OMP DO
                 do i = 1,Ntraj
                     dW = Wiener_step(seed, dt)
-                    k(1,2) = sr
                     Q(:,i) =  step(Q(:,i), k, dt, Q0, b, a, dW)
-                    k(1,2) = 0.D0
-                    Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, b, a, dW)
+                    Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), dt, Q0, b, a, dW)
                 end do
                 !$OMP END DO
 
@@ -564,7 +563,7 @@ Program Dumbbell_Validation_tests
             print *, "Kailash psi=", K_Apsi(s), "+-", K_Vpsi(s)
 
             call assertEquals(K_Apsi(s), out_var(s)%Apsi, &
-                              2*sqrt(out_var(s)%Vpsi**2+K_Vpsi(s)**2), "Veta")
+                              2*sqrt(out_var(s)%Vpsi**2+K_Vpsi(s)**2), "Apsi")
             print *, ""
         end do
 
@@ -589,8 +588,8 @@ Program Dumbbell_Validation_tests
         allocate(Q(3,1:Ntraj), Q_eq_VR(3,1:Ntraj))
 
         k(:,:) = 0.D0
-
         sr = 0.0001D0
+        k(1,2) = sr
 
         Q0 = 5.D0
         alpha = 0.1D0
@@ -611,10 +610,8 @@ Program Dumbbell_Validation_tests
             !$OMP DO
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
-                k(1,2) = sr
                 Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW)
-                k(1,2) = 0.D0
-                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW)
+                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), dt, Q0, alpha, a, dW)
             end do
             !$OMP END DO
 
@@ -683,8 +680,8 @@ Program Dumbbell_Validation_tests
         allocate(Yvals(2*Nvals), Qvals(2*Nvals), storage_vals(2*Nvals, 2))
 
         k(:,:) = 0.D0
-
         sr = 0.0001D0
+        k(1,2) = sr
 
         Q0 = 5.D0
         alpha = 0.1D0
@@ -709,10 +706,8 @@ Program Dumbbell_Validation_tests
             !$OMP DO
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
-                k(1,2) = sr
                 Q(:,i) =  step(Q(:,i), k, dt, Q0, alpha, a, dW, Yvals, Qvals)
-                k(1,2) = 0.D0
-                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), k, dt, Q0, alpha, a, dW, Yvals, Qvals)
+                Q_eq_VR(:,i) =  step(Q_eq_VR(:,i), dt, Q0, alpha, a, dW, Yvals, Qvals)
             end do
             !$OMP END DO
 
