@@ -34,8 +34,23 @@ errorbar(data(:,1,i), Q, dQ,...
 hold off
 
 %% Read a list of files and plot data at a specific time
-files = ["eta_sr0.1.dat", "eta_sr0.01.dat", "eta_sr0.001.dat"];
-xvals = [0.1, 0.01, 0.001]; % must be in the same order as in files
+xvals = [0.00004, 0.00012, 0.0004, 0.0012, 0.004, 0.012,...
+    0.04, 0.12, 0.4, 1.2, 4];
+
+% If you've used a different naming convention, you can just set the 
+% files variable as an array of strings directly
+prefix = "eta_sr";
+suffix = ".dat";
+for i=1:length(xvals)
+    str = sprintf('%.15f ',xvals(i));
+    if floor(xvals(i))==xvals(i)
+        str = regexprep(str, '.[0]+ ', '');
+    else
+        str = regexprep(str, '[0]+ ', '');
+    end
+    files(i) = strcat(prefix, str, suffix);
+end
+
 time = 7;
 
 yvals = [];
@@ -57,10 +72,22 @@ for j = 1:length(files)
     [Q(j), dQ(j)] = textra(step_sorted_data, 1, 0.25);
 end
 
-figure();
+% figure();
 hold on
-errorbar(xvals, Q, dQ,...
+axes1 = gca;
+fsize=20;
+pbaspect([1. 1. 1]);
+hold(axes1,'on');
+box(axes1,'on');
+set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
+% Comment out the below 2 lines
+% as needed.
+axes1.XScale='log';
+% axes1.YScale='log';
+e1 = errorbar(xvals, Q, dQ, 'bd', ...
         'DisplayName','TEXTRA','LineWidth',2);
+e1.MarkerFaceColor='b';
+e1.MarkerSize=14;
 dim = [0.18 0.18 0.7 0.7];
 str = ['t = ', num2str(time)];
 annotation('textbox',dim,'String',str,'FitBoxToText',...
