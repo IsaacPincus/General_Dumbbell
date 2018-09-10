@@ -42,8 +42,8 @@ function [Q, dQ] = textra(data, iflag, initial_limit)
                 failed_string = ['Did not converge after %d attempts' ...
                     ', setting Q and dQ to smallest timestep values'];
                 sprintf(failed_string, k)
-                Q = y(1);
-                dQ = dy(1);
+                Q = y(end);
+                dQ = dy(end);
                 return
             end
             limit = limit/10;

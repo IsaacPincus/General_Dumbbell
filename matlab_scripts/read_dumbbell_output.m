@@ -8,17 +8,24 @@ size_steps=Nrelax_times/delay+1;
 
 %% Read a single file and plot time-series data at different timesteps
 
-file = 'eta.dat';
+file = 'eta_sr0.0004.dat';
 rawData = dlmread(file, '');
 
-data = [];
+data = nan(size_steps,3,length(dt));
+pos = 0;
 for i=1:length(dt)
-    data(:,:,i) = rawData((size_steps+1)*(i-1)+2:(size_steps+1)*i, 1:3);
+    if dt(i)>delay
+        size_steps=Nrelax_times/dt(i);
+    else
+        size_steps=Nrelax_times/delay+1;
+    end
+    pos = pos + size_steps + 1;
+    data(1:size_steps,1:3,i) = rawData(pos-(size_steps+1)+2:pos, 1:3);
 end
 
 for i=1:size_steps
     step_sorted_data = [dt', reshape(data(i,2:3,:),[2,length(dt)])'];
-    [Q(i), dQ(i)] = textra(step_sorted_data, 1, 0.1);
+    [Q(i), dQ(i)] = textra(step_sorted_data, 0, 0.1);
 end
 
 figure();
@@ -34,8 +41,8 @@ errorbar(data(:,1,i), Q, dQ,...
 hold off
 
 %% Read a list of files and plot data at a specific time
-xvals = [0.00004, 0.00012, 0.0004, 0.0012, 0.004, 0.012,...
-    0.04, 0.12, 0.4, 1.2, 4];
+xvals = [0.0004, 0.0012, 0.004, 0.012,...
+    0.04, 0.12, 0.4, 1.2, 4, 12, 40];
 
 % If you've used a different naming convention, you can just set the 
 % files variable as an array of strings directly
@@ -44,7 +51,7 @@ suffix = ".dat";
 for i=1:length(xvals)
     str = sprintf('%.15f ',xvals(i));
     if floor(xvals(i))==xvals(i)
-        str = regexprep(str, '.[0]+ ', '');
+        str = regexprep(str, '\.[0]+ ', '');
     else
         str = regexprep(str, '[0]+ ', '');
     end
@@ -60,9 +67,16 @@ clear Q dQ
 for j = 1:length(files)
     rawData = dlmread(files(j), '');
 
-    data = [];
+    data = nan(size_steps,3,length(dt));
+    pos = 0;
     for i=1:length(dt)
-        data(:,:,i) = rawData((size_steps+1)*(i-1)+2:(size_steps+1)*i, 1:3);
+        if dt(i)>delay
+            size_steps=Nrelax_times/dt(i);
+        else
+            size_steps=Nrelax_times/delay+1;
+        end
+        pos = pos + size_steps + 1;
+        data(1:size_steps,1:3,i) = rawData(pos-(size_steps+1)+2:pos, 1:3);
     end
     
     t = data(:,1,1);
@@ -72,7 +86,7 @@ for j = 1:length(files)
     [Q(j), dQ(j)] = textra(step_sorted_data, 1, 0.25);
 end
 
-% figure();
+figure();
 hold on
 axes1 = gca;
 fsize=20;
