@@ -5,6 +5,11 @@ dt = dtData(2:end, 1)';
 Nrelax_times = dtData(1, 3);
 delay = dtData(1,4);
 size_steps=Nrelax_times/delay+1;
+inpdata = dlmread('inputparameters.inp', '');
+sigma = inpdata(4);
+alpha = inpdata(2);
+%set Rodlike_opt to true for Rodlike units, false for Hookean
+Rodlike_opt = true;
 
 %% Read a single file and plot time-series data at different timesteps
 
@@ -26,6 +31,19 @@ end
 for i=1:size_steps
     step_sorted_data = [dt', reshape(data(i,2:3,:),[2,length(dt)])'];
     [Q(i), dQ(i)] = textra(step_sorted_data, 0, 0.1);
+end
+
+if(Rodlike_opt)
+    data(:,1,:) = data(:,1,:)/(4*sigma^2);
+    %for Viscosity data
+    data(:,2:3,:) = data(:,2:3,:)*sigma/4;
+    Q = Q*sigma/4;
+    dQ = dQ*sigma/4;
+    %for Psi1, Psi2 data
+%     data(:,2:3,:) = data(:,2:3,:)/(16*sigma);
+%     Q = Q/(16*sigma);
+%     dQ = dQ/(16*sigma);
+    
 end
 
 figure();
@@ -58,7 +76,7 @@ for i=1:length(xvals)
     files(i) = strcat(prefix, str, suffix);
 end
 
-time = 7;
+% time = 7;
 
 yvals = [];
 dyvals = [];
@@ -79,11 +97,22 @@ for j = 1:length(files)
         data(1:size_steps,1:3,i) = rawData(pos-(size_steps+1)+2:pos, 1:3);
     end
     
-    t = data(:,1,1);
-    [~, timestep] = min(abs(t-time));
+%     t = data(:,1,1);
+%     [~, timestep] = min(abs(t-time));
     
-    step_sorted_data = [dt', reshape(data(timestep,2:3,:),[2,length(dt)])'];
+    step_sorted_data = [dt', reshape(data(end,2:3,:),[2,length(dt)])'];
     [Q(j), dQ(j)] = textra(step_sorted_data, 1, 0.25);
+end
+
+if(Rodlike_opt)
+    %for shear-rate xvals
+    xvals = xvals*4*sigma^2;
+    %for Viscosity data
+    Q = Q*sigma/4;
+    dQ = dQ*sigma/4;
+    %for Psi1, Psi2 data
+%     Q = Q/(16*sigma);
+%     dQ = dQ/(16*sigma);
 end
 
 figure();

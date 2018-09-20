@@ -6,6 +6,15 @@
 %function by integrating over the distribution, as well as viscosity and
 %first and second normal stress differences.
 
+%This script uses the same non-dimensionalisation (in other words, the same
+%definition of lambda) as the rodlike time constant in Larson et al. 2006.
+%It also considers hydrodynamic interaction from the RPY tensor, rather
+%than the Oseen-Burgers tensor.
+
+% Toggle this to suppress the singular matrix warnings, since they're
+% pretty annoying and the results don't appear innaccurate. Be aware that
+% it seems you can't set N too high (~>50 or higher). 
+warning('off', 'MATLAB:nearlySingularMatrix')
 
 %% Transient behaviour
 clear variables
@@ -15,42 +24,48 @@ kB = 1.38064852*10^-23;     %Boltzmann constant, m^2 kg s^-2 K^-1
 T = 295.15;                 %Temperature, K
 k = 2000;                    %shear rate, s^-1
 
-%here we calculate the dimensionless shear rate, Plambda
+%here we calculate the dimensionless shear rate, the Weissenberg number Wi
 %for prolate spheriods
 % a = 400*10^-9;              %semi-diameter parallel to axis of rev, m
 % b = 4*10^-9;                %semi-diameter perpendicular to axis of rev, m
 % r = a/b;
 % Ft = sqrt(r^2-1)/(r^(1/3)*log(r+sqrt(r^2-1)));
 % Fr = (4*(r^4-1))/(3*r^2*((2*(2*r^2-1))/(r^(4/3)*Ft))-2);
-% lambda = (4*Fr*pi()*eta*a*b^2)/(3*kB*T);
-% Plambda = k*lambda
+% lambda = (4*Fr*pi()*eta*a*b^2)/(3*kB*T)*(1/12);
+% Wi = k*lambda
 % h = 0;
+% mu1 = 1;
+% mu2 = 1;
 
 % For a bead-rod dumbbell with HI (Stewart and Sorensen 1972, Soc. Rheol):
 L = 400*10^-9;              %Length of dumbbell rod, nm
 a = 200*10^-9;               %Size of beads, nm
 zeta = 6*pi*eta*a;          %Stokes law friction factor, Pa.s.m
 h = (3*a)/(4*L);            %Hydrodynamic interaction parameter
-lambda = (zeta*L^2)/(12*kB*T*(1-h));
-Plambda = k*lambda;
-Plambda = 10/3;
+lambda = (zeta*L^2)/(kB*T);
+Wi = k*lambda;
+Wi = 3.2*4;
 h = 0;
+mu1 = 1-h*(1+32/27*h^2);
+mu2 = 1-h*(1-32/27*h^2);
 
 %N must be even! Order of expansion of spherical harmonics
-N = 4;
-tauspan = [0 10];
+N = 40;
+% tauspan = [0 1];
+tauspan = linspace(0,1,50);
 A_0 = zeros((N/2+1)*((N/2+1)+1),1);
 A_0(1) = 1;
 
 %Perform integration of system of ODEs
-[tau, A] = ode15s(@(tau,A) psi_harmonics(tau,A,N,Plambda), tauspan, A_0);
+[tau, A] = ode15s(@(tau,A) psi_harmonics(tau,A,N,Wi,mu1), tauspan, A_0);
 
-tau_red = tau(1:ceil(length(tau)/50):end);
+% tau_red = tau(1:ceil(length(tau)/50):end);
 % Calculate S-parameter
-for i = 1:length(tau_red)
-    time_step = tau_red(i);
-    t = length(tau(tau<time_step))+1;
-    ha = A(t,:);
+for i = 1:length(tau)
+%     time_step = tau(i);
+%     t = length(tau(tau<time_step))+1;
+%     t = tau(i);
+    ha = A(i,:);
     
     sc = (1/3) - (1/15)*get_A(ha,0,2,0,N) ...
         + (2/5)*get_A(ha,0,2,2,N);
@@ -67,33 +82,35 @@ pbaspect([1. 1. 1]);
 xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 20')
 ylabel('$S$', 'Interpreter', 'latex', 'FontSize', 20')
 hold on
-e1 = plot(tau_red, S, 'bo', 'DisplayName','S-parameter','LineWidth',2);
+e1 = plot(tau, S, 'bo', 'DisplayName','S-parameter','LineWidth',2);
 e1.MarkerFaceColor='b';
 e1.MarkerSize=10;
 dim = [0.55 0.15 0.3 0.3];
-str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Plambda)]...
+str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
     ,['$h = $' num2str(h)]};
 annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
 hold off
 
 %Calculate polymer contribution to viscosity, psi1, psi2
-for i = 1:length(tau_red)
-    time_step = tau_red(i);
-    t = length(tau(tau<time_step))+1;
+for i = 1:length(tau)
+%     time_step = tau_red(i);
+%     t = length(tau(tau<time_step))+1;
+%     t = tau(i);
     
-    ha = A(t,:);
-    eta_p(i) = -(-(6/(5*Plambda))*get_A(ha,1,2,2,N) ...
-        -(1-h)/(1-2*h)*((2/5) - (4/35)*get_A(ha,0,2,0,N) + ...
+    ha = A(i,:);
+    eta_p(i) = -(-(6/(5*Wi))*get_A(ha,1,2,2,N) ...
+        -(1)/(12*mu2)*((2/5) - (4/35)*get_A(ha,0,2,0,N) + ...
         (2/105)*get_A(ha,0,4,0,N)-16*get_A(ha,0,4,4,N)));
-    Psi1_p(i) = -(-(12/(5*Plambda^2))*get_A(ha,0,2,2,N)...
-        - (1-h)/(1-2*h)*(32/Plambda)*get_A(ha,1,4,4,N));
-    Psi2_p(i) = -((3/Plambda^2)*(-(1/5)*get_A(ha,0,2,0,N) ...
+    Psi1_p(i) = -(-(12/(5*Wi^2))*get_A(ha,0,2,2,N)...
+        - (4/(Wi*3*mu2))*get_A(ha,1,4,4,N));
+    Psi2_p(i) = -((3/Wi^2)*(-(1/5)*get_A(ha,0,2,0,N) ...
         - (2/5)*get_A(ha,0,2,2,N)) ...
-        + (1-h)/(1-2*h)*(3/Plambda)*((8/35)*get_A(ha,1,2,2,N)...
+        + (1/(Wi*4*mu2))*((8/35)*get_A(ha,1,2,2,N)...
         - (4/7)*get_A(ha,1,4,2,N) -(16/3)*get_A(ha,1,4,4,N)));
 end
 
 figure();
+set(gcf, 'Position', [500 400 1000 700])
 axes1 = gca;
 % axes1.XScale = 'log';
 hold(axes1,'on');
@@ -106,7 +123,7 @@ yyaxis(axes1, 'left')
 axes1.YAxis(1).Color = 'b';
 xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 24)
 ylabel('$\frac{(\eta - \eta_s)}{nkT\lambda}$', 'Interpreter', 'latex', 'FontSize', 32)
-e1 = plot(tau_red,eta_p,'bo', 'DisplayName','Viscosity','LineWidth',2);
+e1 = plot(tau,eta_p,'bo', 'DisplayName','Viscosity','LineWidth',2);
 e1.MarkerFaceColor='b';
 e1.MarkerSize=10;
 hold off
@@ -115,7 +132,7 @@ hold on
 yyaxis(axes1, 'right')
 axes1.YAxis(2).Color = 'r';
 ylabel('$\frac{\Psi_1}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 32')
-e1 = plot(tau_red,Psi1_p,'rd', 'DisplayName','\Psi_1','LineWidth',2);
+e1 = plot(tau,Psi1_p,'rd', 'DisplayName','\Psi_1','LineWidth',2);
 e1.MarkerFaceColor='r';
 e1.MarkerSize=10;
 
@@ -127,7 +144,7 @@ e1.MarkerSize=10;
 hold off
 
 dim = [0.55 0.15 0.3 0.3];
-str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Plambda)]...
+str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
     ,['$h = $' num2str(h)]};
 annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
 
@@ -139,7 +156,7 @@ pbaspect([1. 1. 1]);
 hold on
 xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 16)
 ylabel('$\frac{\Psi_2}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 30)
-e1 = plot(tau_red,Psi2_p,'gs', 'DisplayName','\Psi_2','LineWidth',2);
+e1 = plot(tau,Psi2_p,'gs', 'DisplayName','\Psi_2','LineWidth',2);
 e1.MarkerFaceColor='g';
 e1.MarkerSize=5;
 hold off
@@ -147,26 +164,27 @@ hold off
 %% Steady state calculations
 clear variables
 h_vals = [0 1/8 2/8 3/8];
-Plambda = logspace(-2,2, 20);
+Wi_vals = logspace(-1,3, 20);
+%N must be even!!
 N = 40;
-h = 0;
-Plm = 1/3;
 
-for i = 1:length(Plambda)
+for i = 1:length(Wi_vals)
     for j = 1:length(h_vals)
         tic
         h = h_vals(j);
-        Plm = Plambda(i);
-        ha = solve_eq(N, Plm);
+        mu1 = 1-h*(1+32/27*h^2);
+        mu2 = 1-h*(1-32/27*h^2);
+        Wi = Wi_vals(i);
+        ha = solve_eq(N, Wi, mu1);
         
-        eta(i,j) = -(-(6/(5*Plm))*get_A(ha,1,2,2,N) ...
-            -(1-h)/(1-2*h)*((2/5) - (4/35)*get_A(ha,0,2,0,N) + ...
+        eta(i,j) = -(-(6/(5*Wi))*get_A(ha,1,2,2,N) ...
+            -(1)/(12*mu2)*((2/5) - (4/35)*get_A(ha,0,2,0,N) + ...
             (2/105)*get_A(ha,0,4,0,N)-16*get_A(ha,0,4,4,N)));
-        Psi1(i,j) = -(-(12/(5*Plm^2))*get_A(ha,0,2,2,N)...
-            - (1-h)/(1-2*h)*(32/Plm)*get_A(ha,1,4,4,N));
-        Psi2(i,j) = -((3/Plm^2)*(-(1/5)*get_A(ha,0,2,0,N) ...
+        Psi1(i,j) = -(-(12/(5*Wi^2))*get_A(ha,0,2,2,N)...
+            - (4/(Wi*3*mu2))*get_A(ha,1,4,4,N));
+        Psi2(i,j) = -((3/Wi^2)*(-(1/5)*get_A(ha,0,2,0,N) ...
             - (2/5)*get_A(ha,0,2,2,N)) ...
-            + (1-h)/(1-2*h)*(3/Plm)*((8/35)*get_A(ha,1,2,2,N)...
+            + (1/(Wi*8*mu2))*((8/35)*get_A(ha,1,2,2,N)...
             - (4/7)*get_A(ha,1,4,2,N) -(16/3)*get_A(ha,1,4,4,N)));
         sc = (1/3) - (1/15)*get_A(ha,0,2,0,N) ...
             + (2/5)*get_A(ha,0,2,2,N);
@@ -187,11 +205,11 @@ set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
 % as needed.
 axes1.XScale='log';
 axes1.YScale='log';
-e1 = plot(Plambda, eta(:,1), 'bd-', ...
+e1 = plot(Wi_vals, eta(:,1), 'bd-', ...
         'DisplayName','h = 0','LineWidth',2);
 e1.MarkerFaceColor='b';
 e1.MarkerSize=14;
-e1 = plot(Plambda, eta(:,end), 'ro-', ...
+e1 = plot(Wi_vals, eta(:,end), 'ro-', ...
         'DisplayName','h = 3/8','LineWidth',2);
 e1.MarkerFaceColor='r';
 e1.MarkerSize=14;
@@ -211,7 +229,8 @@ function A = get_A(Avector, i, n, m, N)
     %Since my internal numbering for the A vector is very convoluted, I've
     %written this function to get A(i,n,m) from the Avector.
     %Numbering is A(1) = A000, A(2) = A010, A(3) = A002, A(4) = A012 etc...
-    %where it's Anim
+    %where it's Anim (confusingly...). So even indices is i=1, odd indices
+    %is i=0, then you count over m first then n in the order of the sum.
     
     if i==1
         j = 2;
@@ -242,7 +261,7 @@ end
 
 function psi = psi_eq(harmonics, theta, phi, N)
     %This function calculates the value of the orientational distribution
-    %function at equilibrium over theta and phi, given the harmonics
+    %function over theta and phi, given the harmonics
     %and the expansion order of the harmonics
     
     i = 1;
@@ -262,7 +281,7 @@ function psi = psi_eq(harmonics, theta, phi, N)
     
 end
 
-function A = solve_eq(N, Plm)
+function A = solve_eq(N, Wi, mu)
     %This solves the same system of linear equations as the
     %psi_harmonics function, only at steady state (and far faster)
     %N must be even!!!
@@ -277,11 +296,11 @@ function A = solve_eq(N, Plm)
             j = 2;
             for n = 0:2:N
                 for m= 0:2:n
-                    Am(i,j) = -Plm*amnpq(m,n,p,q);
+                    Am(i,j) = -Wi*amnpq(m,n,p,q);
                     j = j + 2;
                 end
             end
-            Am(i,i) = -(q*(q+1))/6;
+            Am(i,i) = -(q*(q+1))*mu*2;
             i = i+1;
             
             j = 1;
@@ -291,11 +310,11 @@ function A = solve_eq(N, Plm)
                         Am(i,j) = 0;
                         continue;
                     end
-                    Am(i,j) = +Plm*amnpq(m,n,p,q);
+                    Am(i,j) = +Wi*amnpq(m,n,p,q);
                     j = j + 2;
                 end
             end
-            Am(i,i) = -(q*(q+1))/6;
+            Am(i,i) = -(q*(q+1))*mu*2;
             if p == 0
                 Am(i,i) = 1;
             end
@@ -308,7 +327,7 @@ function A = solve_eq(N, Plm)
     A = Am\x;
 end
 
-function Adash = psi_harmonics(t, y, N, Plm)
+function Adash = psi_harmonics(t, y, N, Wi, mu)
     %This function will essentially return the system of coupled ODEs given
     %in equations B.2a and B.2b in McLachlan et al. This should be able to 
     %account for an arbitrary N, the paper used N=12
@@ -328,7 +347,7 @@ function Adash = psi_harmonics(t, y, N, Plm)
                     j = j + 2;
                 end
             end
-            Adash(i) = -(q*(q+1))/6*y(i) - Plm*aA_sum;
+            Adash(i) = -(q*(q+1))*2*mu*y(i) - Wi*aA_sum;
             i = i+1;
             
             j = 1;
@@ -339,7 +358,7 @@ function Adash = psi_harmonics(t, y, N, Plm)
                     j = j + 2;
                 end
             end
-            Adash(i) = -(q*(q+1))/6*y(i) + Plm*aA_sum;
+            Adash(i) = -(q*(q+1))*2*mu*y(i) + Wi*aA_sum;
             if p == 0
                 Adash(i) = 0;
             end
@@ -397,18 +416,18 @@ end
 %     sin(theta).^3.*cos(phi).^2.*psi_t(tau, A, time, theta, phi, N);
 % 
 % psi_eta_int = @(theta,phi,time) ...
-%     -(-(3/(2*Plambda))*(1-h)/(1-2*h)*sin(theta).^2.*sin(2*phi) ...
+%     -(-(3/(2*Wi))*(1-h)/(1-2*h)*sin(theta).^2.*sin(2*phi) ...
 %      -(3/2)*sin(theta).^4.*sin(2*phi).^2) ...
 %      .*sin(theta).*psi_t(tau, A, time, theta, phi, N);
 %  
 % psi_Psi1_int = @(theta,phi,time) ...
-%     -(-(3/Plambda^2)*(1-h)/(1-2*h)*sin(theta).^2.*cos(2*phi) ...
-%      -(3/Plambda)*sin(theta).^4.*sin(2*phi).*cos(2*phi)) ...
+%     -(-(3/Wi^2)*(1-h)/(1-2*h)*sin(theta).^2.*cos(2*phi) ...
+%      -(3/Wi)*sin(theta).^4.*sin(2*phi).*cos(2*phi)) ...
 %      .*sin(theta).*psi_t(tau, A, time, theta, phi, N);
 % 
 % psi_Psi2_int = @(theta,phi,time) ...
-%     -(-(3/Plambda^2)*(1-h)/(1-2*h)*(sin(theta).^2.*sin(phi).^2 -cos(theta).^2)...
-%      -(3/Plambda)*(sin(theta).^2.*sin(phi).^2 -cos(theta).^2)...
+%     -(-(3/Wi^2)*(1-h)/(1-2*h)*(sin(theta).^2.*sin(phi).^2 -cos(theta).^2)...
+%      -(3/Wi)*(sin(theta).^2.*sin(phi).^2 -cos(theta).^2)...
 %      .*sin(theta).^2.*sin(2*phi)) ...
 %      .*sin(theta).*psi_t(tau, A, time, theta, phi, N);
 %  
