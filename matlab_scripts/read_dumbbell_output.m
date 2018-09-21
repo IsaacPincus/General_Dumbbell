@@ -36,13 +36,13 @@ end
 if(Rodlike_opt)
     data(:,1,:) = data(:,1,:)/(4*sigma^2);
     %for Viscosity data
-    data(:,2:3,:) = data(:,2:3,:)*sigma/4;
-    Q = Q*sigma/4;
-    dQ = dQ*sigma/4;
+    data(:,2:3,:) = data(:,2:3,:)/(4*sigma^2);
+    Q = Q/(4*sigma^2);
+    dQ = dQ/(4*sigma^2);
     %for Psi1, Psi2 data
-%     data(:,2:3,:) = data(:,2:3,:)/(16*sigma);
-%     Q = Q/(16*sigma);
-%     dQ = dQ/(16*sigma);
+%     data(:,2:3,:) = data(:,2:3,:)/(16*sigma^4);
+%     Q = Q/(16*sigma^4);
+%     dQ = dQ/(16*sigma^4);
     
 end
 
@@ -108,11 +108,11 @@ if(Rodlike_opt)
     %for shear-rate xvals
     xvals = xvals*4*sigma^2;
     %for Viscosity data
-    Q = Q*sigma/4;
-    dQ = dQ*sigma/4;
+    Q = Q/(4*sigma^2);
+    dQ = dQ/(4*sigma^2);
     %for Psi1, Psi2 data
-%     Q = Q/(16*sigma);
-%     dQ = dQ/(16*sigma);
+%     Q = Q/(16*sigma^4);
+%     dQ = dQ/(16*sigma^4);
 end
 
 figure();
@@ -132,8 +132,8 @@ e1 = errorbar(xvals, Q, dQ, 'bd', ...
 e1.MarkerFaceColor='b';
 e1.MarkerSize=14;
 dim = [0.18 0.18 0.7 0.7];
-str = ['t = ', num2str(time)];
-annotation('textbox',dim,'String',str,'FitBoxToText',...
-    'on','Interpreter','latex','FontSize',14,'EdgeColor','None');
+% str = ['t = ', num2str(time)];
+% annotation('textbox',dim,'String',str,'FitBoxToText',...
+%     'on','Interpreter','latex','FontSize',14,'EdgeColor','None');
 hold off
 
