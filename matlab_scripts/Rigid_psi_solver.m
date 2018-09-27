@@ -44,10 +44,10 @@ zeta = 6*pi*eta*a;          %Stokes law friction factor, Pa.s.m
 h = (3*a)/(4*L);            %Hydrodynamic interaction parameter
 lambda = (zeta*L^2)/(kB*T);
 Wi = k*lambda;
-Wi = 3.2*4;
-h = 0;
+Wi = 40;
+h = 3/8;
 mu1 = 1-h*(1+32/27*h^2);
-mu2 = 1-h*(1-32/27*h^2);
+mu2 = 1-2*h*(1-32/27*h^2);
 
 %N must be even! Order of expansion of spherical harmonics
 N = 40;
@@ -118,9 +118,9 @@ box(axes1,'on');
 set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
 pbaspect([1. 1. 1]);
 ylim([0 max(eta_p)*1.1]);
-hold on
-yyaxis(axes1, 'left')
-axes1.YAxis(1).Color = 'b';
+% hold on
+% yyaxis(axes1, 'left')
+% axes1.YAxis(1).Color = 'b';
 xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 24)
 ylabel('$\frac{(\eta - \eta_s)}{nkT\lambda}$', 'Interpreter', 'latex', 'FontSize', 32)
 e1 = plot(tau,eta_p,'bo', 'DisplayName','Viscosity','LineWidth',2);
@@ -128,38 +128,38 @@ e1.MarkerFaceColor='b';
 e1.MarkerSize=10;
 hold off
 
-hold on
-yyaxis(axes1, 'right')
-axes1.YAxis(2).Color = 'r';
-ylabel('$\frac{\Psi_1}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 32')
-e1 = plot(tau,Psi1_p,'rd', 'DisplayName','\Psi_1','LineWidth',2);
-e1.MarkerFaceColor='r';
-e1.MarkerSize=10;
+% hold on
+% yyaxis(axes1, 'right')
+% axes1.YAxis(2).Color = 'r';
+% ylabel('$\frac{\Psi_1}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 32')
+% e1 = plot(tau,Psi1_p,'rd', 'DisplayName','\Psi_1','LineWidth',2);
+% e1.MarkerFaceColor='r';
+% e1.MarkerSize=10;
 
 % yval = 0.5;
 % xval = 0.61;
 % annotation('arrow', [xval xval+0.1], [yval yval], 'LineWidth', 1.5, 'Color', 'k')
 % annotation('arrow', [xval xval], [yval yval-0.1], 'LineWidth', 1.5, 'Color', 'k')
 
-hold off
+% hold off
 
 dim = [0.55 0.15 0.3 0.3];
 str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
     ,['$h = $' num2str(h)]};
 annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
 
-axes2 = axes('Position',[.4 .25 .37 .37]);
-hold(axes2,'on');
-box(axes2,'on');
-set(axes2,'FontSize',14,'LineWidth',1.5,'TickLength',[0.015 0.025]);
-pbaspect([1. 1. 1]);
-hold on
-xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 16)
-ylabel('$\frac{\Psi_2}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 30)
-e1 = plot(tau,Psi2_p,'gs', 'DisplayName','\Psi_2','LineWidth',2);
-e1.MarkerFaceColor='g';
-e1.MarkerSize=5;
-hold off
+% axes2 = axes('Position',[.4 .25 .37 .37]);
+% hold(axes2,'on');
+% box(axes2,'on');
+% set(axes2,'FontSize',14,'LineWidth',1.5,'TickLength',[0.015 0.025]);
+% pbaspect([1. 1. 1]);
+% hold on
+% xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 16)
+% ylabel('$\frac{\Psi_2}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 30)
+% e1 = plot(tau,Psi2_p,'gs', 'DisplayName','\Psi_2','LineWidth',2);
+% e1.MarkerFaceColor='g';
+% e1.MarkerSize=5;
+% hold off
 
 %% Steady state calculations
 clear variables

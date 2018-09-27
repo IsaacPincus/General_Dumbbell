@@ -19,7 +19,7 @@ rawData = dlmread(file, '');
 data = nan(size_steps,3,length(dt));
 pos = 0;
 for i=1:length(dt)
-    if dt(i)>delay
+    if dt(i)>=delay
         size_steps=Nrelax_times/dt(i);
     else
         size_steps=Nrelax_times/delay+1;
