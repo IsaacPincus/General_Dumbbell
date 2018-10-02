@@ -128,38 +128,38 @@ e1.MarkerFaceColor='b';
 e1.MarkerSize=10;
 hold off
 
-% hold on
-% yyaxis(axes1, 'right')
-% axes1.YAxis(2).Color = 'r';
-% ylabel('$\frac{\Psi_1}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 32')
-% e1 = plot(tau,Psi1_p,'rd', 'DisplayName','\Psi_1','LineWidth',2);
-% e1.MarkerFaceColor='r';
-% e1.MarkerSize=10;
+hold on
+yyaxis(axes1, 'right')
+axes1.YAxis(2).Color = 'r';
+ylabel('$\frac{\Psi_1}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 32')
+e1 = plot(tau,Psi1_p,'rd', 'DisplayName','\Psi_1','LineWidth',2);
+e1.MarkerFaceColor='r';
+e1.MarkerSize=10;
 
 % yval = 0.5;
 % xval = 0.61;
 % annotation('arrow', [xval xval+0.1], [yval yval], 'LineWidth', 1.5, 'Color', 'k')
 % annotation('arrow', [xval xval], [yval yval-0.1], 'LineWidth', 1.5, 'Color', 'k')
 
-% hold off
+hold off
 
 dim = [0.55 0.15 0.3 0.3];
 str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
     ,['$h = $' num2str(h)]};
 annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
 
-% axes2 = axes('Position',[.4 .25 .37 .37]);
-% hold(axes2,'on');
-% box(axes2,'on');
-% set(axes2,'FontSize',14,'LineWidth',1.5,'TickLength',[0.015 0.025]);
-% pbaspect([1. 1. 1]);
-% hold on
-% xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 16)
-% ylabel('$\frac{\Psi_2}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 30)
-% e1 = plot(tau,Psi2_p,'gs', 'DisplayName','\Psi_2','LineWidth',2);
-% e1.MarkerFaceColor='g';
-% e1.MarkerSize=5;
-% hold off
+axes2 = axes('Position',[.4 .25 .37 .37]);
+hold(axes2,'on');
+box(axes2,'on');
+set(axes2,'FontSize',14,'LineWidth',1.5,'TickLength',[0.015 0.025]);
+pbaspect([1. 1. 1]);
+hold on
+xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 16)
+ylabel('$\frac{\Psi_2}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 30)
+e1 = plot(tau,Psi2_p,'gs', 'DisplayName','\Psi_2','LineWidth',2);
+e1.MarkerFaceColor='g';
+e1.MarkerSize=5;
+hold off
 
 %% Steady state calculations
 clear variables
@@ -173,7 +173,7 @@ for i = 1:length(Wi_vals)
         tic
         h = h_vals(j);
         mu1 = 1-h*(1+32/27*h^2);
-        mu2 = 1-h*(1-32/27*h^2);
+        mu2 = 1-2*h*(1-32/27*h^2);
         Wi = Wi_vals(i);
         ha = solve_eq(N, Wi, mu1);
         

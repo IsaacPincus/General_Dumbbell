@@ -61,6 +61,8 @@ hold off
 %% Read a list of files and plot data at a specific time
 xvals = [0.0004, 0.0012, 0.004, 0.012,...
     0.04, 0.12, 0.4, 1.2, 4, 12, 40];
+% xvals = dlmread('srvals.dat', '');
+% tmaxvals = dlmread('tvals.dat','');
 
 % If you've used a different naming convention, you can just set the 
 % files variable as an array of strings directly
@@ -84,7 +86,8 @@ clear Q dQ
 
 for j = 1:length(files)
     rawData = dlmread(files(j), '');
-
+    
+%     Nrelax_times = tmaxvals(j);
     data = nan(size_steps,3,length(dt));
     pos = 0;
     for i=1:length(dt)
