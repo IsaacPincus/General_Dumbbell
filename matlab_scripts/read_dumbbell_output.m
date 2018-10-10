@@ -1,10 +1,11 @@
 %% Time Data from timestepdata.inp
 % Always run this first
+clear variables
 dtData = dlmread('timestepdata.inp', '');
 dt = dtData(2:end, 1)';
 Nrelax_times = dtData(1, 3);
 delay = dtData(1,4);
-size_steps=Nrelax_times/delay+1;
+size_steps=floor(Nrelax_times/delay+1);
 inpdata = dlmread('inputparameters.inp', '');
 sigma = inpdata(4);
 alpha = inpdata(2);
@@ -20,9 +21,9 @@ data = nan(size_steps,3,length(dt));
 pos = 0;
 for i=1:length(dt)
     if dt(i)>=delay
-        size_steps=Nrelax_times/dt(i);
+        size_steps=floor(Nrelax_times/dt(i));
     else
-        size_steps=Nrelax_times/delay+1;
+        size_steps=floor(Nrelax_times/delay+1);
     end
     pos = pos + size_steps + 1;
     data(1:size_steps,1:3,i) = rawData(pos-(size_steps+1)+2:pos, 1:3);
@@ -57,6 +58,10 @@ errorbar(data(:,1,i), Q, dQ,...
         'DisplayName','TEXTRA','LineWidth',2);
 [h,icons,plots,legend_text]=legend({},'Location','northwest','FontSize',16,'Interpreter','latex','Box','off');
 hold off
+
+% If you want to save collected data to file
+% saveFile = fopen('sr50H400s0.005.dat', 'w');
+% fprintf(saveFile, '%g %g %g \n', [data(:,1,end)'; Q; dQ]);
 
 %% Read a list of files and plot data at a specific time
 xvals = [0.0004, 0.0012, 0.004, 0.012,...
