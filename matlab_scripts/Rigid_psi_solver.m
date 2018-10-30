@@ -223,6 +223,46 @@ ylabel('$\frac{(\eta - \eta_s)}{nkT\lambda}$', 'Interpreter', 'latex', 'FontSize
 %     'on','Interpreter','latex','FontSize',14,'EdgeColor','None');
 hold off
 
+%% S-plot
+clear variables
+
+eta = 9.5*10^-4;            %Fluid dynamic viscosity, Pa.s
+kB = 1.38064852*10^-23;     %Boltzmann constant, m^2 kg s^-2 K^-1
+T = 295.15;                 %Temperature, K
+N = 40;
+
+k_vals = linspace(0,3000,10);
+
+for i=1:length(k_vals)
+    k = k_vals(i);
+    
+    L = 800*10^-9;              %Length of dumbbell rod, nm
+    a = 200*10^-9;               %Size of beads, nm
+    zeta = 6*pi*eta*a;          %Stokes law friction factor, Pa.s.m
+    h = (3*a)/(4*L);            %Hydrodynamic interaction parameter
+    lambda = (zeta*L^2)/(kB*T);
+    Wi = k*lambda;
+    mu1 = 1-h*(1+32/27*h^2);
+    mu2 = 1-2*h*(1-32/27*h^2);
+    
+    ha = solve_eq(N, Wi, mu1);
+    
+    sc = (1/3) - (1/15)*get_A(ha,0,2,0,N) ...
+            + (2/5)*get_A(ha,0,2,2,N);
+    
+    S(i) = 0.5*(3*sc - 1);
+    
+end
+
+kLD = [780, 1250, 1880, 2500, 3150];
+LDr = [0.71, 0.87, 0.96, 1.05, 1.01];
+
+figure();
+hold on
+plot(k_vals,S, 'go')
+plot(kLD, LDr/1.8063, 'rx')
+hold off
+
 %% Functions
 
 function A = get_A(Avector, i, n, m, N)

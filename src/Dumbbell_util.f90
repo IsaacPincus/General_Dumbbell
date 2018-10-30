@@ -8,7 +8,7 @@ module Dumbbell_util
                                                         shape(delT))
 
     type measured_variables
-        real*8 :: Qavg, Vqavg, S, Serr, Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2
+        real*8 :: Qavg, Vqavg, S, Serr, Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Favg, Ferr
     end type
 
     contains
@@ -20,13 +20,14 @@ module Dumbbell_util
         integer*8, intent(in) :: Ntraj
         integer :: i
         real*8, intent(in) :: Q0, alpha, Q(3,Ntraj), sr
-        real*8 :: tau(3,3), F(3), Bs, Ql, Ql2, B_eta, Bpsi, Bpsi2
+        real*8 :: tau(3,3), F(3), Bs, Ql, Ql2, B_eta, Bpsi, Bpsi2, Fl2, Fl
 
         ! These variables are all global and shared between threads
         meas%Aeta = 0.D0; meas%Apsi = 0.D0; meas%Apsi2 = 0.D0
         meas%Veta = 0.D0; meas%Vpsi = 0.D0; meas%Vpsi2 = 0.D0
         meas%Qavg = 0.D0; meas%Vqavg = 0.D0
         meas%S = 0.D0; meas%Serr = 0.D0
+        meas%Favg = 0.D0; meas%Ferr = 0.D0
 
         !These variables SHOULD(!) be private
         tau = 0.D0
@@ -34,6 +35,7 @@ module Dumbbell_util
         meas_tmp%Veta = 0.D0; meas_tmp%Vpsi = 0.D0; meas_tmp%Vpsi2 = 0.D0
         meas_tmp%Qavg = 0.D0; meas_tmp%Vqavg = 0.D0
         meas_tmp%S = 0.D0; meas_tmp%Serr = 0.D0
+        meas_tmp%Favg = 0.D0; meas_tmp%Ferr = 0.D0
 
         !$OMP DO
         do i=1,Ntraj
@@ -41,12 +43,16 @@ module Dumbbell_util
             Ql = sqrt(Ql2)
             Bs = dot_product( (/1,0,0/), Q(:,i))**2/Ql2
             F(:) = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/alpha)*Q(:,i)/Ql
+            Fl2 = F(1)**2 + F(2)**2 + F(3)**2
+            Fl = sqrt(Fl2)
             tau(:,:) = dyadic_prod(Q(:,i), F)
 
             meas_tmp%Qavg = meas_tmp%Qavg + Ql2
             meas_tmp%Vqavg = meas_tmp%Vqavg + Ql
             meas_tmp%S = meas_tmp%S + 0.5*(3*Bs - 1)
             meas_tmp%Serr = meas_tmp%Serr + 0.25*(9*Bs**2 - 6*Bs + 1)
+            meas_tmp%Favg = meas_tmp%Favg + Fl2
+            meas_tmp%Ferr = meas_tmp%Ferr + Fl
 
             B_eta = tau(1,2)
             Bpsi = (tau(1,1) - tau(2,2))
@@ -80,6 +86,10 @@ module Dumbbell_util
         meas%S = meas%S + meas_tmp%S
         !$OMP atomic
         meas%Serr = meas%Serr + meas_tmp%Serr
+        !$OMP atomic
+        meas%Favg = meas%Favg + meas_tmp%Favg
+        !$OMP atomic
+        meas%Ferr = meas%Ferr + meas_tmp%Ferr
 
         !$OMP barrier
 
@@ -100,6 +110,10 @@ module Dumbbell_util
         meas%Vqavg = meas%Vqavg/Ntraj
         meas%Vqavg = sqrt((meas%Qavg**2 - meas%Vqavg**2)/(Ntraj-1))
 
+        meas%Favg = sqrt(meas%Favg/Ntraj)
+        meas%Ferr= meas%Ferr/Ntraj
+        meas%Ferr = sqrt((meas%Favg**2 - meas%Ferr**2)/(Ntraj-1))
+
         meas%S = meas%S/Ntraj
         meas%Serr = meas%Serr/Ntraj
         meas%Serr = sqrt((meas%Serr - meas%S**2)/(Ntraj-1))
@@ -114,13 +128,14 @@ module Dumbbell_util
         integer*8, intent(in) :: Ntraj
         integer :: i
         real*8, intent(in) :: Q0, alpha, Q(3,Ntraj), Q_eq_VR(3,Ntraj), sr
-        real*8 :: tau(3,3), F(3), Bs, Ql, Ql2, B_eta, Bpsi, Bpsi2
+        real*8 :: tau(3,3), F(3), Bs, Ql, Ql2, B_eta, Bpsi, Bpsi2, Fl2, Fl
 
         ! These variables are all global and shared between threads
         meas%Aeta = 0.D0; meas%Apsi = 0.D0; meas%Apsi2 = 0.D0
         meas%Veta = 0.D0; meas%Vpsi = 0.D0; meas%Vpsi2 = 0.D0
         meas%Qavg = 0.D0; meas%Vqavg = 0.D0
         meas%S = 0.D0; meas%Serr = 0.D0
+        meas%Favg = 0.D0; meas%Ferr = 0.D0
 
         !These variables SHOULD(!) be private
         tau = 0.D0
@@ -128,6 +143,7 @@ module Dumbbell_util
         meas_tmp%Veta = 0.D0; meas_tmp%Vpsi = 0.D0; meas_tmp%Vpsi2 = 0.D0
         meas_tmp%Qavg = 0.D0; meas_tmp%Vqavg = 0.D0
         meas_tmp%S = 0.D0; meas_tmp%Serr = 0.D0
+        meas_tmp%Favg = 0.D0; meas_tmp%Ferr = 0.D0
 
         !$OMP DO
         do i=1,Ntraj
@@ -136,6 +152,8 @@ module Dumbbell_util
             Ql = sqrt(Ql2)
             Bs = dot_product( (/1,0,0/), Q(:,i))**2/Ql2
             F(:) = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/alpha)*Q(:,i)/Ql
+            Fl2 = F(1)**2 + F(2)**2 + F(3)**2
+            Fl = sqrt(Fl2)
             tau(:,:) = dyadic_prod(Q(:,i), F)
 
             B_eta = tau(1,2)
@@ -146,6 +164,8 @@ module Dumbbell_util
             meas_tmp%Vqavg = meas_tmp%Vqavg + Ql
             meas_tmp%S = meas_tmp%S + 0.5*(3*Bs - 1)
             meas_tmp%Serr = meas_tmp%Serr + 0.25*(9*Bs**2 - 6*Bs + 1)
+            meas_tmp%Favg = meas_tmp%Favg + Fl2
+            meas_tmp%Ferr = meas_tmp%Ferr + Fl
 
             !subtract equilibrium values from shear-flow values
             Ql2 = Q_eq_VR(1,i)**2 + Q_eq_VR(2,i)**2 + Q_eq_VR(3,i)**2
@@ -189,6 +209,10 @@ module Dumbbell_util
         meas%S = meas%S + meas_tmp%S
         !$OMP atomic
         meas%Serr = meas%Serr + meas_tmp%Serr
+        !$OMP atomic
+        meas%Favg = meas%Favg + meas_tmp%Favg
+        !$OMP atomic
+        meas%Ferr = meas%Ferr + meas_tmp%Ferr
 
         !$OMP barrier
 
@@ -208,6 +232,10 @@ module Dumbbell_util
         meas%Qavg = sqrt(meas%Qavg/Ntraj)
         meas%Vqavg = meas%Vqavg/Ntraj
         meas%Vqavg = sqrt((meas%Qavg**2 - meas%Vqavg**2)/(Ntraj-1))
+
+        meas%Favg = sqrt(meas%Favg/Ntraj)
+        meas%Ferr= meas%Ferr/Ntraj
+        meas%Ferr = sqrt((meas%Favg**2 - meas%Ferr**2)/(Ntraj-1))
 
         meas%S = meas%S/Ntraj
         meas%Serr = meas%Serr/Ntraj

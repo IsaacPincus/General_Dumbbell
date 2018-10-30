@@ -22,6 +22,7 @@ program General_Dumbbell
     open(unit=32, file='options.inp')
     open(unit=25, file='Q_dist_output.dat')
 
+    open(unit=19, file='F.dat')
     open(unit=20, file='Ql.dat')
     open(unit=21, file='S.dat')
     open(unit=22, file='eta.dat')
@@ -72,6 +73,10 @@ program General_Dumbbell
 
             call initialise_output_files_timestep()
 
+            if (dist_opt.eq.1) then
+                write(25, *) 'Timestep width is: ', dt
+            end if
+
             !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, VR_opt, out_var)
             !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
             if (VR_opt.eq.0) then
@@ -85,6 +90,7 @@ program General_Dumbbell
                     delay_counter = delay_counter + dt
                     if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
                         call write_data_to_files_no_VR(steps)
+                        call write_distribution_to_file(steps)
                         if (delay_counter.ge.(output_delay-1.D-10)) then
                             delay_counter = delay_counter - output_delay
                         end if
@@ -106,6 +112,7 @@ program General_Dumbbell
                     delay_counter = delay_counter + dt
                     if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
                         call write_data_to_files_with_VR(steps)
+                        call write_distribution_to_file(steps)
                         if (delay_counter.ge.(output_delay-1.D-10)) then
                             delay_counter = delay_counter - output_delay
                         end if
@@ -116,14 +123,6 @@ program General_Dumbbell
                 print *, "Variance Reduction option not set, place in options.inp file"
             end if
             !$OMP END PARALLEL
-
-            if (dist_opt.eq.1) then
-                25 format(2(E12.5,4X), E12.5)
-                write(25, *) 'Timestep width is: ', dt
-                do i=1,Ntraj
-                    write(25, 25) Q(:,i)
-                end do
-            end if
 
         end do
     !Original method branch, applies for lookup_opt == 0
@@ -140,6 +139,10 @@ program General_Dumbbell
 
             call initialise_output_files_timestep()
 
+            if (dist_opt.eq.1) then
+                write(25, *) 'Timestep width is: ', dt
+            end if
+
             !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, VR_opt, out_var)
             !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
             if (VR_opt.eq.0) then
@@ -153,6 +156,7 @@ program General_Dumbbell
                     delay_counter = delay_counter + dt
                     if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
                         call write_data_to_files_no_VR(steps)
+                        call write_distribution_to_file(steps)
                         if (delay_counter.ge.(output_delay-1.D-10)) then
                             delay_counter = delay_counter - output_delay
                         end if
@@ -174,6 +178,7 @@ program General_Dumbbell
                     delay_counter = delay_counter + dt
                     if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
                         call write_data_to_files_with_VR(steps)
+                        call write_distribution_to_file(steps)
                         if (delay_counter.ge.(output_delay-1.D-10)) then
                             delay_counter = delay_counter - output_delay
                         end if
@@ -185,13 +190,12 @@ program General_Dumbbell
             end if
             !$OMP END PARALLEL
 
-            call write_distribution_to_file()
-
         end do
     else
         print *, "lookup_opt not set, place in options.inp file"
     end if
 
+    close(unit=19)
     close(unit=20)
     close(unit=21)
     close(unit=22)
@@ -209,16 +213,19 @@ program General_Dumbbell
 
     contains
 
-    subroutine write_distribution_to_file()
+    subroutine write_distribution_to_file(NoSteps)
         implicit none
+        integer*8, intent(in) :: NoSteps
 
+        !$OMP single
         if (dist_opt.eq.1) then
             25 format(2(E12.5,4X), E12.5)
-            write(25, *) 'Timestep width is: ', dt
+            write(25, *) NoSteps*dt
             do i=1,Ntraj
                 write(25, 25) Q(:,i)
             end do
         end if
+        !$OMP end single
 
     end subroutine
 
@@ -229,6 +236,7 @@ program General_Dumbbell
 
         121 format(E11.4, 2X, E15.8, 2X, E15.8)
         !$OMP single
+        write(19,121) NoSteps*dt, out_var%Favg, out_var%Ferr
         write(20,121) NoSteps*dt, out_var%Qavg, out_var%Vqavg
         write(21,121) NoSteps*dt, out_var%S, out_var%Serr
         write(22,121) NoSteps*dt, out_var%Aeta, out_var%Veta
@@ -245,6 +253,7 @@ program General_Dumbbell
 
         121 format(E11.4, 2X, E15.8, 2X, E15.8)
         !$OMP single
+        write(19,121) NoSteps*dt, out_var%Favg, out_var%Ferr
         write(20,121) NoSteps*dt, out_var%Qavg, out_var%Vqavg
         write(21,121) NoSteps*dt, out_var%S, out_var%Serr
         write(22,121) NoSteps*dt, out_var%Aeta, out_var%Veta
@@ -257,6 +266,7 @@ program General_Dumbbell
     subroutine initialise_output_files_timestep()
         implicit none
 
+        write(19,'(E11.4)') dt
         write(20,'(E11.4)') dt
         write(21,'(E11.4)') dt
         write(22,'(E11.4)') dt
