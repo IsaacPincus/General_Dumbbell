@@ -77,6 +77,8 @@ program General_Dumbbell
                 write(25, *) 'Timestep width is: ', dt
             end if
 
+            call write_distribution_to_file(0)
+
             !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, VR_opt, out_var)
             !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
             if (VR_opt.eq.0) then
@@ -142,6 +144,8 @@ program General_Dumbbell
             if (dist_opt.eq.1) then
                 write(25, *) 'Timestep width is: ', dt
             end if
+
+            call write_distribution_to_file(0)
 
             !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, Q_eq_VR, VR_opt, out_var)
             !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
