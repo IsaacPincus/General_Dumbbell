@@ -44,13 +44,13 @@ zeta = 6*pi*eta*a;          %Stokes law friction factor, Pa.s.m
 h = (3*a)/(4*L);            %Hydrodynamic interaction parameter
 lambda = (zeta*L^2)/(kB*T);
 Wi = k*lambda;
-Wi = 40;
+Wi = 1;
 h = 3/8;
 mu1 = 1-h*(1+32/27*h^2);
 mu2 = 1-2*h*(1-32/27*h^2);
 
 %N must be even! Order of expansion of spherical harmonics
-N = 40;
+N = 20;
 % tauspan = [0 1];
 tauspan = linspace(0,1,50);
 A_0 = zeros((N/2+1)*((N/2+1)+1),1);
@@ -60,17 +60,38 @@ A_0(1) = 1;
 [tau, A] = ode15s(@(tau,A) psi_harmonics(tau,A,N,Wi,mu1), tauspan, A_0);
 
 % tau_red = tau(1:ceil(length(tau)/50):end);
-% Calculate S-parameter
+
+%Calculate polymer contribution to viscosity, psi1, psi2
 for i = 1:length(tau)
-%     time_step = tau(i);
+%     time_step = tau_red(i);
 %     t = length(tau(tau<time_step))+1;
 %     t = tau(i);
+    
     ha = A(i,:);
     
-    sc = (1/3) - (1/15)*get_A(ha,0,2,0,N) ...
+    sc(i) = (1/3) - (1/15)*get_A(ha,0,2,0,N) ...
         + (2/5)*get_A(ha,0,2,2,N);
     
-    S(i) = 0.5*(3*sc - 1);
+    S(i) = 0.5*(3*sc(i) - 1);
+    
+    eta_p(i) = -(-(6/(5*Wi))*get_A(ha,1,2,2,N) ...
+        -(1)/(12*mu2)*((2/5) - (4/35)*get_A(ha,0,2,0,N) + ...
+        (2/105)*get_A(ha,0,4,0,N)-16*get_A(ha,0,4,4,N)));
+    Psi1_p(i) = -(-(12/(5*Wi^2))*get_A(ha,0,2,2,N)...
+        - (8/(Wi*3*mu2))*get_A(ha,1,4,4,N));
+    Psi2_p(i) = -((3/Wi^2)*(-(1/5)*get_A(ha,0,2,0,N) ...
+        - (2/5)*get_A(ha,0,2,2,N)) ...
+        + (1/(Wi*4*mu2))*((8/35)*get_A(ha,1,2,2,N)...
+        - (4/7)*get_A(ha,1,4,2,N) -(16/3)*get_A(ha,1,4,4,N)));
+
+    chi_tau(i) = (1/2)*atan(2*eta_p(i)/(Psi1_p(i)*Wi));
+
+    S_tau(i) = 0.5*(3*cos(chi_tau(i))^2-1);
+    
+    chi_G(i) = (1/2)*atan((6/5)*get_A(ha,1,2,2,N)/(1-(1/5)*get_A(ha,0,2,0,N)));
+    
+    S_G(i) = 0.5*(3*cos(chi_G(i))^2-1);
+                    
 end
 
 figure();
@@ -85,80 +106,148 @@ hold on
 e1 = plot(tau, S, 'bo', 'DisplayName','S-parameter','LineWidth',2);
 e1.MarkerFaceColor='b';
 e1.MarkerSize=10;
+e1 = plot(tau, S_tau, 'r>', 'DisplayName','S_tau-parameter','LineWidth',2);
+e1.MarkerFaceColor='r';
+e1.MarkerSize=10;
+e1 = plot(tau, S_G, 'gs', 'DisplayName','S_G-parameter','LineWidth',2);
+e1.MarkerFaceColor='g';
+e1.MarkerSize=10;
 dim = [0.55 0.15 0.3 0.3];
 str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
     ,['$h = $' num2str(h)]};
 annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
 hold off
 
-%Calculate polymer contribution to viscosity, psi1, psi2
-for i = 1:length(tau)
-%     time_step = tau_red(i);
-%     t = length(tau(tau<time_step))+1;
-%     t = tau(i);
-    
-    ha = A(i,:);
-    eta_p(i) = -(-(6/(5*Wi))*get_A(ha,1,2,2,N) ...
-        -(1)/(12*mu2)*((2/5) - (4/35)*get_A(ha,0,2,0,N) + ...
-        (2/105)*get_A(ha,0,4,0,N)-16*get_A(ha,0,4,4,N)));
-    Psi1_p(i) = -(-(12/(5*Wi^2))*get_A(ha,0,2,2,N)...
-        - (8/(Wi*3*mu2))*get_A(ha,1,4,4,N));
-    Psi2_p(i) = -((3/Wi^2)*(-(1/5)*get_A(ha,0,2,0,N) ...
-        - (2/5)*get_A(ha,0,2,2,N)) ...
-        + (1/(Wi*4*mu2))*((8/35)*get_A(ha,1,2,2,N)...
-        - (4/7)*get_A(ha,1,4,2,N) -(16/3)*get_A(ha,1,4,4,N)));
-end
-
 figure();
-set(gcf, 'Position', [500 400 1000 700])
 axes1 = gca;
-% axes1.XScale = 'log';
 hold(axes1,'on');
 box(axes1,'on');
 set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
 pbaspect([1. 1. 1]);
-ylim([0 max(eta_p)*1.1]);
-% hold on
-% yyaxis(axes1, 'left')
-% axes1.YAxis(1).Color = 'b';
-xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 24)
-ylabel('$\frac{(\eta - \eta_s)}{nkT\lambda}$', 'Interpreter', 'latex', 'FontSize', 32)
-e1 = plot(tau,eta_p,'bo', 'DisplayName','Viscosity','LineWidth',2);
-e1.MarkerFaceColor='b';
-e1.MarkerSize=10;
-hold off
-
+xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 20')
+ylabel('$S$', 'Interpreter', 'latex', 'FontSize', 20')
 hold on
-yyaxis(axes1, 'right')
-axes1.YAxis(2).Color = 'r';
-ylabel('$\frac{\Psi_1}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 32')
-e1 = plot(tau,Psi1_p,'rd', 'DisplayName','\Psi_1','LineWidth',2);
+e1 = plot(tau, cos(chi_tau).^2, 'r>', 'DisplayName','chi_tau','LineWidth',2);
 e1.MarkerFaceColor='r';
 e1.MarkerSize=10;
-
-% yval = 0.5;
-% xval = 0.61;
-% annotation('arrow', [xval xval+0.1], [yval yval], 'LineWidth', 1.5, 'Color', 'k')
-% annotation('arrow', [xval xval], [yval yval-0.1], 'LineWidth', 1.5, 'Color', 'k')
-
-hold off
-
+e1 = plot(tau, cos(chi_G).^2, 'gs', 'DisplayName','chi_g','LineWidth',2);
+e1.MarkerFaceColor='g';
+e1.MarkerSize=10;
+e1 = plot(tau, sc, 'bh', 'DisplayName','cos^2','LineWidth',2);
+e1.MarkerFaceColor='b';
+e1.MarkerSize=10;
 dim = [0.55 0.15 0.3 0.3];
 str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
     ,['$h = $' num2str(h)]};
 annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
+hold off
 
-axes2 = axes('Position',[.4 .25 .37 .37]);
-hold(axes2,'on');
-box(axes2,'on');
-set(axes2,'FontSize',14,'LineWidth',1.5,'TickLength',[0.015 0.025]);
-pbaspect([1. 1. 1]);
+% figure();
+% set(gcf, 'Position', [500 400 1000 700])
+% axes1 = gca;
+% % axes1.XScale = 'log';
+% hold(axes1,'on');
+% box(axes1,'on');
+% set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
+% pbaspect([1. 1. 1]);
+% ylim([0 max(eta_p)*1.1]);
+% % hold on
+% % yyaxis(axes1, 'left')
+% % axes1.YAxis(1).Color = 'b';
+% xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 24)
+% ylabel('$\frac{(\eta - \eta_s)}{nkT\lambda}$', 'Interpreter', 'latex', 'FontSize', 32)
+% e1 = plot(tau,eta_p,'bo', 'DisplayName','Viscosity','LineWidth',2);
+% e1.MarkerFaceColor='b';
+% e1.MarkerSize=10;
+% hold off
+% 
+% hold on
+% yyaxis(axes1, 'right')
+% axes1.YAxis(2).Color = 'r';
+% ylabel('$\frac{\Psi_1}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 32')
+% e1 = plot(tau,Psi1_p,'rd', 'DisplayName','\Psi_1','LineWidth',2);
+% e1.MarkerFaceColor='r';
+% e1.MarkerSize=10;
+% 
+% % yval = 0.5;
+% % xval = 0.61;
+% % annotation('arrow', [xval xval+0.1], [yval yval], 'LineWidth', 1.5, 'Color', 'k')
+% % annotation('arrow', [xval xval], [yval yval-0.1], 'LineWidth', 1.5, 'Color', 'k')
+% 
+% hold off
+% 
+% dim = [0.55 0.15 0.3 0.3];
+% str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
+%     ,['$h = $' num2str(h)]};
+% annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
+% 
+% axes2 = axes('Position',[.4 .25 .37 .37]);
+% hold(axes2,'on');
+% box(axes2,'on');
+% set(axes2,'FontSize',14,'LineWidth',1.5,'TickLength',[0.015 0.025]);
+% pbaspect([1. 1. 1]);
+% hold on
+% xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 16)
+% ylabel('$\frac{\Psi_2}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 30)
+% e1 = plot(tau,Psi2_p,'gs', 'DisplayName','\Psi_2','LineWidth',2);
+% e1.MarkerFaceColor='g';
+% e1.MarkerSize=5;
+% hold off
+
+%% Animation of distribution function
+azi_r = -pi:pi/12:pi;
+elev_r = -pi/2:pi/12:pi/2;
+
+% azi_m = (azi_r(1:end-1)+azi_r(2:end))/2;
+% elev_m = (elev_r(1:end-1)+elev_r(2:end))/2;
+
+[azi_g, elev_g] = meshgrid(azi_r, elev_r);
+
+dist = psi_eq(A(1,:),elev_g,azi_g,N);
+[X,Y,Z] = sph2cart(azi_g, elev_g, dist);
+
+k = [0 1 0; 0 0 0; 0 0 0];
+minX = -1;
+maxX = 1;
+minY = -1;
+maxY = 1;
+minZ = -1;
+maxZ = 1;
+
+[Xs, Ys, Zs] = meshgrid(...
+    minX:(maxX-minX)/5:maxX,...
+    minY:(maxY-minY)/5:maxY,...
+    minZ:(maxZ-minZ)/5:maxZ);
+
+for i=1:size(Xs,1)
+    for j=1:size(Ys,2)
+        for p=1:size(Zs,3)
+            fl(:,i,j,p) = k*[Xs(i,j,p);Ys(i,j,p);Zs(i,j,p)];
+        end
+    end
+end
+
+aniFig = figure('units','normalized','outerposition',[0 0 1 1]);
+axis equal
 hold on
-xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 16)
-ylabel('$\frac{\Psi_2}{nkT\lambda^2}$', 'Interpreter', 'latex', 'FontSize', 30)
-e1 = plot(tau,Psi2_p,'gs', 'DisplayName','\Psi_2','LineWidth',2);
-e1.MarkerFaceColor='g';
-e1.MarkerSize=5;
+xlabel('x')
+ylabel('y')
+zlabel('z')
+hAni = surf(X,Y,Z);
+quiver3(Xs,Ys,Zs,...
+    squeeze(fl(1,:,:,:)),squeeze(fl(2,:,:,:)),squeeze(fl(3,:,:,:)),...
+    'linewidth', 2, 'MaxHeadSize', 0.5);
+view(30,30);
+pause(2)
+for time=2:size(A,1)
+    dist = psi_eq(A(time,:),elev_g,azi_g,N);
+    [X,Y,Z] = sph2cart(azi_g, elev_g, dist);
+    hAni.XData = X;
+    hAni.YData = Y;
+    hAni.ZData = Z;
+    drawnow limitrate
+    pause(0.2)
+end
 hold off
 
 %% Steady state calculations
@@ -190,6 +279,10 @@ for i = 1:length(Wi_vals)
             + (2/5)*get_A(ha,0,2,2,N);
     
         S(i,j) = 0.5*(3*sc - 1);
+        
+        chi_tau(i,j) = (1/2)*atan(2*eta(i,j)/Psi1(i,j));
+        
+        S_tau(i,j) = cos(chi_tau(i,j))^2;
     end
 end
 
@@ -262,6 +355,81 @@ hold on
 plot(k_vals,S, 'go')
 plot(kLD, LDr/1.8063, 'rx')
 hold off
+
+%% S-plot with lengths
+clear variables
+
+eta = 9.5*10^-4;            %Fluid dynamic viscosity, Pa.s
+kB = 1.38064852*10^-23;     %Boltzmann constant, m^2 kg s^-2 K^-1
+T = 295.15;                 %Temperature, K
+N = 40;
+k = 3000;
+L_vals = linspace(0,1000,10)*10^-9;
+
+for i=1:length(L_vals)
+    L = L_vals(i);
+    
+    L = 800*10^-9;
+    a = 10*10^-9;               %Size of beads, nm
+    zeta = 6*pi*eta*a;          %Stokes law friction factor, Pa.s.m
+    h = (3*a)/(4*L);            %Hydrodynamic interaction parameter
+    lambda = (zeta*L^2)/(kB*T);
+    Wi = k*lambda;
+    mu1 = 1-h*(1+32/27*h^2);
+    mu2 = 1-2*h*(1-32/27*h^2);
+    
+    ha = solve_eq(N, Wi, mu1);
+    
+    sc = (1/3) - (1/15)*get_A(ha,0,2,0,N) ...
+            + (2/5)*get_A(ha,0,2,2,N);
+    
+    S(i) = 0.5*(3*sc - 1);
+    
+end
+
+kLD = [780, 1250, 1880, 2500, 3150];
+LDr = [0.71, 0.87, 0.96, 1.05, 1.01];
+
+expData = [773.0547550432277, 0.7086614173228347
+1257.2046109510088, 0.8645669291338585
+1884.005763688761, 0.9842519685039371
+2512.9682997118157, 1.0472440944881891
+3141.9308357348705, 1.0125984251968505];
+
+kLD = expData(:,1);
+LDr = expData(:,2);
+
+figure();
+hold on
+plot(k_vals,S, 'go')
+plot(kLD, LDr/1.8063, 'rx')
+hold off
+
+%% Some testing
+
+azi_r = 0:pi/12:2*pi;
+elev_r = 0:pi/12:pi;
+
+% azi_m = (azi_r(1:end-1)+azi_r(2:end))/2;
+% elev_m = (elev_r(1:end-1)+elev_r(2:end))/2;
+
+[azi_g, elev_g] = meshgrid(azi_r, elev_r);
+
+
+dist = psi_eq(A(end,:),azi_g,elev_g,N)
+% dist = abs(dist/max(max(dist)));
+
+[X,Y,Z] = sph2cart(azi_g, elev_g, dist);
+% X = [X;X(1,:)];
+% Y = [Y;Y(1,:)];
+% Z = [Z;Z(1,:)];
+
+aniFig = figure('units','normalized','outerposition',[0 0 1 1]);
+axis equal
+hold on
+hAni = surf(X,Y,Z);
+hold off
+
 
 %% Functions
 

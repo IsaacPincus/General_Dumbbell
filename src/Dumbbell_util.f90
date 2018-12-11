@@ -287,6 +287,12 @@ module Dumbbell_util
 
     end function Wiener_step
 
+!    function rand_norm(seed)
+!        implicit none
+!
+!
+!    end function
+
     pure function find_roots(a, b, c, lower_bound, upper_bound)
         implicit none
         real*8, intent(in) :: a, b, c, lower_bound, upper_bound

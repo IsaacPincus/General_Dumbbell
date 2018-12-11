@@ -20,7 +20,7 @@ program General_Dumbbell
     open(unit=31, file='inputparameters.inp')
     open(unit=30, file='timestepdata.inp')
     open(unit=32, file='options.inp')
-    open(unit=25, file='Q_dist_output.dat')
+    open(unit=25, file='Q_dist_output.dat', form='unformatted')
 
     open(unit=19, file='F.dat')
     open(unit=20, file='Ql.dat')
@@ -74,7 +74,7 @@ program General_Dumbbell
             call initialise_output_files_timestep()
 
             if (dist_opt.eq.1) then
-                write(25, *) 'Timestep width is: ', dt
+                write(25) dt
             end if
 
             call write_distribution_to_file(0)
@@ -142,7 +142,7 @@ program General_Dumbbell
             call initialise_output_files_timestep()
 
             if (dist_opt.eq.1) then
-                write(25, *) 'Timestep width is: ', dt
+                write(25) dt
             end if
 
             call write_distribution_to_file(0)
@@ -223,11 +223,8 @@ program General_Dumbbell
 
         !$OMP single
         if (dist_opt.eq.1) then
-            25 format(2(E12.5,4X), E12.5)
-            write(25, *) NoSteps*dt
-            do i=1,Ntraj
-                write(25, 25) Q(:,i)
-            end do
+            write(25) NoSteps*dt
+            write(25) Q
         end if
         !$OMP end single
 

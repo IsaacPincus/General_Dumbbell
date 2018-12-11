@@ -8,28 +8,43 @@ Ntraj = dtData(1,1);
 delay = dtData(1,4);
 size_steps=floor(Nrelax_times/delay+1)+1;
 fileID = fopen('Q_dist_output.dat', 'r');
-data = ones(Ntraj, 3, length(dt), size_steps);
 
 tic
+data = nan(Ntraj, 3, length(dt), size_steps);
+
+file = 'Q_dist_output.dat';
+fid = fopen(file, 'rb');
+
 for i=1:length(dt)
-    dummy = fgets(fileID);
+    % read the first timestep width
+    hr1 = fread(fid, 1, 'int32');
+    dt_check(i) = fread(fid, 1, 'float64');
+    hr1 = fread(fid, 1, 'int32');
+    
+    % Find the length between outputs
     if dt(i)>=delay
-        size_steps=floor(Nrelax_times/dt(i))+1;
+        size_steps=Nrelax_times/dt(i)+1;
     else
-        size_steps=floor(Nrelax_times/delay+1)+1;
+        size_steps=Nrelax_times/delay+2;
     end
     
+    % Run loop over timesteps
     for j=1:size_steps
-        if (j~=1)
-            dummy=fgets(fileID);
-        end
-        dummy = fgets(fileID);
-        data(:,:,i,j) = fscanf(fileID, '%f %f %f', size(data(:,:,i,j)'))';
+        % read the first timestep
+        hr1 = fread(fid, 1, 'int32');
+        t(i,j) = fread(fid, 1, 'float64');
+        hr1 = fread(fid, 1, 'int32');
+
+        % read the first set of data
+        hrd = fread(fid, 1, 'int32');
+        len = hrd/(3*8);
+        data(:,:,i,j) = fread(fid, [3, len], 'float64')';
+        hrd = fread(fid, 1, 'int32');
     end
 end
-toc
 
-fclose(fileID);
+fclose(fid);
+toc
 
 %% Processing and plotting
 
