@@ -8,115 +8,279 @@ module Dumbbell_util
                                                         shape(delT))
 
     type measured_variables
-        real*8 :: Qavg, Vqavg, S, Serr, Aeta, Veta, Apsi, Vpsi, Apsi2, Vpsi2, Favg, Ferr
+        real*8 :: AvgQ, ErrQ, S, ErrS, AvgEta, ErrEta
+        real*8 :: AvgPsi, ErrPsi, AvgPsi2, ErrPsi2, AvgF, ErrF
+        real*8 :: AvgChiTau, ErrChiTau, AvgChiG, ErrChiG
     end type
 
     contains
 
+    subroutine measure(N, Q, avgA, avgB, varA, varB, covAB)
+        implicit none
+        !This details a single-pass algorithm for calculation of statistical moments,
+        !which is used for a variety of material properties in the other functions
+        !from https://prod-ng.sandia.gov/techlib-noauth/access-control.cgi/2008/086212.pdf
+        integer*8, intent(in) :: N
+        integer :: i
+        real*8, intent(in), dimension(:,:) :: Q
+        real*8, intent(out) :: avgA, avgB, varA, varB, covAB
+        real*8 :: avgAtmp, avgBtmp, covABtmp, varAtmp, varBtmp, A, B, delA, delB, li
+!        real*8 :: muA1, muB1, muA2, muB2
+        real*8, save :: si
+
+
+        !shared between threads in external openMP construct
+        avgA = 0.D0; avgB = 0.D0; covAB = 0.D0; varA = 0.D0; varB = 0.D0
+
+        !private to subroutine and hence private to threads
+        avgAtmp = 0.D0; avgBtmp = 0.D0; covABtmp = 0.D0; varAtmp = 0.D0; varBtmp = 0.D0
+
+        !li (local increment) has a value for each thread, keeps track of number of samples
+        !per thread
+        li = 0.D0
+        !si (shared increment) is declared using 'save' and so is shared between threads, used to
+        !keep track of the current number of samples in moment during reduction
+        si = 0.D0
+
+        !$OMP Do
+        do i=1,N
+            li = li + 1
+
+            A = Q(1,i)*Q(2,i)
+            B = Q(1,i)*Q(1,i) - Q(2,i)*Q(2,i)
+            delA = A - avgAtmp
+            delB = B - avgBtmp
+            avgAtmp = avgAtmp + delA/li
+            avgBtmp = avgBtmp + delB/li
+
+            varAtmp = varAtmp + delA*(A-avgAtmp)
+            varBtmp = varBtmp + delB*(B-avgBtmp)
+
+!            covABtmp = (covABtmp*(li-1) + (1.D0/li)*(A*(li-1) - avgAtmp)*(B*(li-1) - avgBtmp))/li
+            covABtmp = covABtmp + (li-1)/(li)*delA*delB
+
+        end do
+        !$OMP END DO
+
+        !$OMP CRITICAL
+        delA = avgAtmp-avgA
+        delB = avgBtmp-avgB
+        avgA = avgA + li*(delA)/(li+si)
+        avgB = avgB + li*(delB)/(li+si)
+        varA = varA + varAtmp + (li*si)*delA**2/(li+si)
+        varB = varB + varBtmp + (li*si)*delB**2/(li+si)
+
+        covAB = covAB + covABtmp + (delA)*(delB)*(li*si)/(li+si)
+
+        si = si + li
+        !$OMP END CRITICAL
+
+        !$OMP barrier
+
+        !$OMP SINGLE
+        varA = varA/(N-1)
+        varB = varB/(N-1)
+        covAB = covAB/(N-1)
+        !$OMP END SINGLE
+
+
+
+    end subroutine
+
     subroutine measure_shear_no_VR(meas, Q, Q0, alpha, sr, Ntraj)
         implicit none
         type(measured_variables), intent(out) :: meas
-        type(measured_variables) :: meas_tmp
         integer*8, intent(in) :: Ntraj
         integer :: i
         real*8, intent(in) :: Q0, alpha, Q(3,Ntraj), sr
-        real*8 :: tau(3,3), F(3), Bs, Ql, Ql2, B_eta, Bpsi, Bpsi2, Fl2, Fl
+        real*8 :: tau(3,3), F(3), Bs, Ql, Ql2, Fl2, Fl, S, inTan, li
+        !temporary variables, local to threads
+        real*8 :: AvgEtaTmp, VarEtaTmp, AvgPsiTmp, VarPsiTmp, AvgPsi2Tmp, VarPsi2Tmp
+        real*8 :: AvgQl2Tmp, VarQl2Tmp, AvgFTmp, VarFTmp, AvgSTmp, VarSTmp
+        real*8 :: AvgQxQyTmp, VarQxQyTmp
+        real*8 :: AvgTauxyTmp, VarTauxyTmp
+        real*8 :: CovQxyAndQxxminyyTmp, CovTauxyAndTauxxminyyTmp
+        real*8 :: delEta, delPsi, delPsi2, delS, delF, delQl2, delQxQy, delTauxy
+        real*8 :: AvgTauxxminyyTmp, VarTauxxminyyTmp, delTauxxminyy
+        real*8 :: AvgTauyyminzzTmp, VarTauyyminzzTmp, delTauyyminzz
+        real*8 :: AvgQxxminyyTmp, VarQxxminyyTmp, delQxxminyy
+        !shared variables created using save
+        real*8, save :: AvgEta, VarEta, AvgPsi, VarPsi, AvgPsi2, VarPsi2
+        real*8, save :: AvgQl2, VarQl2, AvgF, VarF, AvgS, VarS
+        real*8, save:: AvgQxQy, VarQxQy
+        real*8, save :: AvgTauxy, VarTauxy
+        real*8, save :: AvgTauxxminyy, VarTauxxminyy
+        real*8, save :: AvgTauyyminzz, VarTauyyminzz
+        real*8, save :: AvgQxxminyy, VarQxxminyy
+        real*8, save :: CovQxyAndQxxminyy, CovTauxyAndTauxxminyy
+        real*8, save :: si
 
         ! These variables are all global and shared between threads
-        meas%Aeta = 0.D0; meas%Apsi = 0.D0; meas%Apsi2 = 0.D0
-        meas%Veta = 0.D0; meas%Vpsi = 0.D0; meas%Vpsi2 = 0.D0
-        meas%Qavg = 0.D0; meas%Vqavg = 0.D0
-        meas%S = 0.D0; meas%Serr = 0.D0
-        meas%Favg = 0.D0; meas%Ferr = 0.D0
+        AvgEta = 0.D0; VarEta = 0.D0; AvgPsi = 0.D0; VarPsi = 0.D0;
+        AvgPsi2 = 0.D0; VarPsi2 = 0.D0
+        AvgQl2 = 0.D0; VarQl2 = 0.D0; AvgF = 0.D0; VarF = 0.D0;
+        AvgS = 0.D0; VarS = 0.D0
+        AvgQxQy = 0.D0; VarQxQy = 0.D0
+        AvgTauxy = 0.D0; VarTauxy = 0.D0
+        AvgTauxxminyy = 0.D0; VarTauxxminyy = 0.D0;
+        AvgTauyyminzz = 0.D0; VarTauyyminzz = 0.D0;
+        AvgQxxminyy = 0.D0; VarQxxminyy = 0.D0;
+        si = 0.D0
 
         !These variables SHOULD(!) be private
         tau = 0.D0
-        meas_tmp%Aeta = 0.D0; meas_tmp%Apsi = 0.D0; meas_tmp%Apsi2 = 0.D0
-        meas_tmp%Veta = 0.D0; meas_tmp%Vpsi = 0.D0; meas_tmp%Vpsi2 = 0.D0
-        meas_tmp%Qavg = 0.D0; meas_tmp%Vqavg = 0.D0
-        meas_tmp%S = 0.D0; meas_tmp%Serr = 0.D0
-        meas_tmp%Favg = 0.D0; meas_tmp%Ferr = 0.D0
+        li = 0.D0 ! stands for local i, aka private increment variable for each thread
+        AvgEtaTmp = 0.D0; VarEtaTmp = 0.D0; AvgPsiTmp = 0.D0; VarPsiTmp = 0.D0;
+        AvgPsi2Tmp = 0.D0; VarPsi2Tmp = 0.D0
+        AvgQl2Tmp = 0.D0; VarQl2Tmp = 0.D0; AvgFTmp = 0.D0; VarFTmp = 0.D0;
+        AvgSTmp = 0.D0; VarSTmp = 0.D0
+        AvgQxQyTmp = 0.D0; VarQxQyTmp = 0.D0
+        AvgTauxyTmp = 0.D0; VarTauxyTmp = 0.D0
+        AvgTauxxminyyTmp = 0.D0; VarTauxxminyyTmp = 0.D0;
+        AvgTauyyminzzTmp = 0.D0; VarTauyyminzzTmp = 0.D0;
+        AvgQxxminyyTmp = 0.D0; VarQxxminyyTmp = 0.D0;
+
 
         !$OMP DO
         do i=1,Ntraj
-            Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
+            li = li + 1.D0
+
+            !Calculate required quantities
+            Ql2 = Q(1,i)**2.D0 + Q(2,i)**2.D0 + Q(3,i)**2.D0
             Ql = sqrt(Ql2)
-            Bs = dot_product( (/1,0,0/), Q(:,i))**2/Ql2
+            S = 0.5D0*(3.D0*dot_product( (/1,0,0/), Q(:,i))**2/Ql2-1.D0)
             F(:) = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/alpha)*Q(:,i)/Ql
             Fl2 = F(1)**2 + F(2)**2 + F(3)**2
             Fl = sqrt(Fl2)
             tau(:,:) = dyadic_prod(Q(:,i), F)
 
-            meas_tmp%Qavg = meas_tmp%Qavg + Ql2
-            meas_tmp%Vqavg = meas_tmp%Vqavg + Ql
-            meas_tmp%S = meas_tmp%S + 0.5*(3*Bs - 1)
-            meas_tmp%Serr = meas_tmp%Serr + 0.25*(9*Bs**2 - 6*Bs + 1)
-            meas_tmp%Favg = meas_tmp%Favg + Fl2
-            meas_tmp%Ferr = meas_tmp%Ferr + Fl
+            !Calculate on-line average, variance and covariance
+            delTauxy = tau(1,2) - AvgTauxyTmp
+            delTauxxminyy = tau(1,1) - tau(2,2) - AvgTauxxminyyTmp
+            delTauyyminzz = tau(2,2) - tau(3,3) - AvgTauyyminzzTmp
+            delS = S - AvgSTmp
+            delQl2 = Ql2 - AvgQl2Tmp
+            delF = Fl - AvgFTmp
+            delQxQy = Q(1,i)*Q(2,i) - AvgQxQyTmp
+            delQxxminyy = Q(1,i)*Q(1,i) - Q(2,i)*Q(2,i) - AvgQxxminyyTmp
 
-            B_eta = tau(1,2)
-            Bpsi = (tau(1,1) - tau(2,2))
-            Bpsi2 = (tau(2,2) - tau(3,3))
-            meas_tmp%Aeta = meas_tmp%Aeta + B_eta
-            meas_tmp%Apsi = meas_tmp%Apsi + Bpsi
-            meas_tmp%Apsi2 = meas_tmp%Apsi2 + Bpsi2
-            meas_tmp%Veta = meas_tmp%Veta + B_eta**2
-            meas_tmp%Vpsi = meas_tmp%Vpsi + Bpsi**2
-            meas_tmp%Vpsi2 = meas_tmp%Vpsi2 + Bpsi2**2
+            AvgTauxyTmp = AvgTauxyTmp           + delTauxy/li
+            AvgTauxxminyyTmp = AvgTauxxminyyTmp + delTauxxminyy/li
+            AvgTauyyminzzTmp = AvgTauyyminzzTmp + delTauyyminzz/li
+            AvgSTmp = AvgSTmp                   + delS/li
+            AvgQl2Tmp = AvgQl2Tmp               + delQl2/li
+            AvgFTmp = AvgFTmp                   + delF/li
+            AvgQxQyTmp = AvgQxQyTmp             + DelQxQy/li
+            AvgQxxminyyTmp = AvgQxxminyyTmp     + delQxxminyy/li
+
+            VarTauxyTmp = VarTauxyTmp           + delTauxy*(tau(1,2) - AvgTauxyTmp)
+            VarTauxxminyyTmp = VarTauxxminyyTmp + delTauxxminyy*&
+                                                &(tau(1,1) - tau(2,2) - AvgTauxxminyyTmp)
+            VarTauyyminzzTmp = VarTauyyminzzTmp + delTauyyminzz*&
+                                                &(tau(2,2) - tau(3,3) - AvgTauyyminzzTmp)
+            VarSTmp = VarSTmp                   + delS*(S - AvgSTmp)
+            VarQl2Tmp = VarQl2Tmp               + delQl2*(Ql2 - AvgQl2Tmp)
+            VarFTmp = VarFTmp                   + delF*(Fl - AvgFTmp)
+            VarQxQyTmp = VarQxQyTmp             + DelQxQy*(Q(1,i)*Q(2,i) - AvgQxQyTmp)
+            VarQxxminyyTmp = VarQxxminyyTmp     + delQxxminyy*&
+                                                &(Q(1,i)*Q(1,i) - Q(2,i)*Q(2,i) - AvgQxxminyyTmp)
+
+            CovTauxyAndTauxxminyyTmp = CovTauxyAndTauxxminyyTmp + &
+                        &(li-1.D0)/li*delTauxy*delTauxxminyy
+            CovQxyAndQxxminyyTmp = CovQxyAndQxxminyyTmp + &
+                        &(li-1.D0)/li*delQxQy*delQxxminyy
+
         end do
         !$OMP END DO
 
-        !$OMP atomic
-        meas%Aeta = meas%Aeta + meas_tmp%Aeta
-        !$OMP atomic
-        meas%Veta = meas%Veta + meas_tmp%Veta
-        !$OMP atomic
-        meas%Apsi = meas%Apsi + meas_tmp%Apsi
-        !$OMP atomic
-        meas%Vpsi = meas%Vpsi + meas_tmp%Vpsi
-        !$OMP atomic
-        meas%Apsi2 = meas%Apsi2 + meas_tmp%Apsi2
-        !$OMP atomic
-        meas%Vpsi2 = meas%Vpsi2 + meas_tmp%Vpsi2
-        !$OMP atomic
-        meas%Qavg = meas%Qavg + meas_tmp%Qavg
-        !$OMP atomic
-        meas%Vqavg = meas%Vqavg + meas_tmp%Vqavg
-        !$OMP atomic
-        meas%S = meas%S + meas_tmp%S
-        !$OMP atomic
-        meas%Serr = meas%Serr + meas_tmp%Serr
-        !$OMP atomic
-        meas%Favg = meas%Favg + meas_tmp%Favg
-        !$OMP atomic
-        meas%Ferr = meas%Ferr + meas_tmp%Ferr
+        !Combine results from threads into shared variables
+        !$OMP critical
+        delTauxy = AvgTauxyTmp - AvgTauxy
+        delTauxxminyy = AvgTauxxminyyTmp - AvgTauxxminyy
+        delTauyyminzz = AvgTauyyminzzTmp - AvgTauyyminzz
+        delS = AvgSTmp - AvgS
+        delQl2 = AvgQl2Tmp - AvgQl2
+        delF = AvgFTmp - AvgF
+        delQxQy = AvgQxQyTmp - AvgQxQy
+        delQxxminyy = AvgQxxminyyTmp - AvgQxxminyy
+
+        AvgTauxy = AvgTauxy + li*delTauxy/(li+si)
+        AvgTauxxminyy = AvgTauxxminyy + li*delTauxxminyy/(li+si)
+        AvgTauyyminzz = AvgTauyyminzz + li*delTauyyminzz/(li+si)
+        AvgS = AvgS + li*delS/(li+si)
+        AvgQl2 = AvgQl2 + li*delQl2/(li+si)
+        AvgF = AvgF + li*delF/(li+si)
+        AvgQxQy = AvgQxQy + li*delQxQy/(li+si)
+        AvgQxxminyy = AvgQxxminyy + li*delQxxminyy/(li+si)
+
+        VarTauxy = VarTauxy + VarTauxyTmp + (li*si)*delTauxy**2/(li+si)
+        VarTauxxminyy = VarTauxxminyy + VarTauxxminyyTmp +&
+                            & (li*si)*delTauxxminyy**2/(li+si)
+        VarTauyyminzz = VarTauyyminzz + VarTauyyminzzTmp +&
+                            & (li*si)*delTauyyminzz**2/(li+si)
+        VarS = VarS + VarSTmp + (li*si)*delS**2/(li+si)
+        VarQl2 = VarQl2 + VarQl2Tmp + (li*si)*delQl2**2/(li+si)
+        VarF = VarF + VarFTmp + (li*si)*delF**2/(li+si)
+        VarQxQy = VarQxQy + VarQxQyTmp + (li*si)*delQxQy**2/(li+si)
+        VarQxxminyy = VarQxxminyy + VarQxxminyyTmp + &
+                            & (li*si)*delQxxminyy**2/(li+si)
+
+        CovQxyAndQxxminyy = CovQxyAndQxxminyy + CovQxyAndQxxminyyTmp + &
+                    & delQxQy*delQxxminyy*(li*si)/(li+si)
+        CovTauxyAndTauxxminyy = CovTauxyAndTauxxminyy + CovTauxyAndTauxxminyyTmp + &
+                    & delTauxy*delTauxxminyy*(li*si)/(li+si)
+
+        si = si + li
+        !$OMP END critical
 
         !$OMP barrier
 
         !$OMP single
-        meas%Aeta = meas%Aeta/(Ntraj*sr)
-        meas%Veta = meas%Veta/(Ntraj*sr**2)
-        meas%Veta = sqrt((meas%Veta - meas%Aeta**2)/(Ntraj-1))
+        !Quantities above are technically moments, not variances
+        !We divide by N-1 to give an unbiased estimator of the variance
+        VarTauxy = VarTauxy/(Ntraj-1)
+        VarTauxxminyy = VarTauxxminyy/(Ntraj-1)
+        VarTauyyminzz = VarTauyyminzz/(Ntraj-1)
+        VarS = VarS/(Ntraj-1)
+        VarQl2 = VarQl2/(Ntraj-1)
+        VarF = VarF/(Ntraj-1)
+        VarQxQy = VarQxQy/(Ntraj-1)
+        VarQxxminyy = VarQxxminyy/(Ntraj-1)
+        CovQxyAndQxxminyy = CovQxyAndQxxminyy/(Ntraj-1)
+        CovTauxyAndTauxxminyy = CovTauxyAndTauxxminyy/(Ntraj-1)
 
-        meas%Apsi = meas%Apsi/(Ntraj*sr**2)
-        meas%Vpsi = meas%Vpsi/(Ntraj*sr**4)
-        meas%Vpsi = sqrt((meas%Vpsi - meas%Apsi**2)/(Ntraj-1))
+        !Convert from variances to standard errors
+        meas%AvgQ = sqrt(AvgQl2)
+        meas%ErrQ = 0.5D0*(1.D0/meas%AvgQ)*sqrt(VarQl2/Ntraj)
 
-        meas%Apsi2 = meas%Apsi2/(Ntraj*sr**2)
-        meas%Vpsi2 = meas%Vpsi2/(Ntraj*sr**4)
-        meas%Vpsi2 = sqrt((meas%Vpsi2 - meas%Apsi2**2)/(Ntraj-1))
+        meas%S = AvgS
+        meas%ErrS = sqrt(VarS/Ntraj)
 
-        meas%Qavg = sqrt(meas%Qavg/Ntraj)
-        meas%Vqavg = meas%Vqavg/Ntraj
-        meas%Vqavg = sqrt((meas%Qavg**2 - meas%Vqavg**2)/(Ntraj-1))
+        meas%AvgF = AvgF
+        meas%ErrF = sqrt(VarF/Ntraj)
 
-        meas%Favg = sqrt(meas%Favg/Ntraj)
-        meas%Ferr= meas%Ferr/Ntraj
-        meas%Ferr = sqrt((meas%Favg**2 - meas%Ferr**2)/(Ntraj-1))
+        meas%AvgEta = AvgTauxy/sr
+        meas%ErrEta = sqrt(VarTauxy/(Ntraj*sr**2))
 
-        meas%S = meas%S/Ntraj
-        meas%Serr = meas%Serr/Ntraj
-        meas%Serr = sqrt((meas%Serr - meas%S**2)/(Ntraj-1))
+        meas%AvgPsi = AvgTauxxminyy/sr**2
+        meas%ErrPsi = sqrt(VarTauxxminyy/(Ntraj*sr**4))
+
+        meas%AvgPsi2 = AvgTauyyminzz/sr**2
+        meas%ErrPsi2 = sqrt(VarTauyyminzz/(Ntraj*sr**4))
+
+        inTan = 2.D0*AvgTauxy/(AvgTauxxminyy)
+        meas%AvgChiTau = 0.5D0*atan(inTan)
+        meas%ErrChiTau = 0.5D0*abs(inTan)/(1.D0+inTan**2)*&
+                        &sqrt(VarTauxxminyy/AvgTauxxminyy**2 +&
+                            & VarTauxy/AvgTauxy**2 - &
+                            & 2.D0*CovTauxyAndTauxxminyy/(AvgTauxy*AvgTauxxminyy))
+
+        inTan = 2.D0*AvgQxQy/AvgQxxminyy
+        meas%AvgChiG = 0.5D0*atan(inTan)
+        meas%ErrChiG = 0.5D0*abs(inTan)/(1.D0+inTan**2)*&
+                        sqrt(VarQxxminyy/AvgQxxminyy**2 +&
+                            & VarTauxy/AvgQxQy**2 - &
+                            & 2.D0*CovQxyAndQxxminyy/(AvgQxQy*AvgQxxminyy))
         !$OMP end single
 
     end subroutine
@@ -124,48 +288,76 @@ module Dumbbell_util
     subroutine measure_shear_with_VR(meas, Q, Q_eq_VR, Q0, alpha, sr, Ntraj)
         implicit none
         type(measured_variables), intent(out) :: meas
-        type(measured_variables) :: meas_tmp
         integer*8, intent(in) :: Ntraj
         integer :: i
-        real*8, intent(in) :: Q0, alpha, Q(3,Ntraj), Q_eq_VR(3,Ntraj), sr
-        real*8 :: tau(3,3), F(3), Bs, Ql, Ql2, B_eta, Bpsi, Bpsi2, Fl2, Fl
+        real*8, intent(in) :: Q0, alpha, Q(3,Ntraj), Q_eq_VR(3, Ntraj), sr
+        real*8 :: tau(3,3), F(3), Bs, Ql, Ql2, Fl2, Fl, S, inTan, li
+        real*8 :: Btauxy, Btauxxminyy, Btauyyminzz, Bqxy, Bqxxminyy
+        !temporary variables, local to threads
+        real*8 :: AvgEtaTmp, VarEtaTmp, AvgPsiTmp, VarPsiTmp, AvgPsi2Tmp, VarPsi2Tmp
+        real*8 :: AvgQl2Tmp, VarQl2Tmp, AvgFTmp, VarFTmp, AvgSTmp, VarSTmp
+        real*8 :: AvgQxQyTmp, VarQxQyTmp
+        real*8 :: AvgTauxyTmp, VarTauxyTmp
+        real*8 :: CovQxyAndQxxminyyTmp, CovTauxyAndTauxxminyyTmp
+        real*8 :: delEta, delPsi, delPsi2, delS, delF, delQl2, delQxQy, delTauxy
+        real*8 :: AvgTauxxminyyTmp, VarTauxxminyyTmp, delTauxxminyy
+        real*8 :: AvgTauyyminzzTmp, VarTauyyminzzTmp, delTauyyminzz
+        real*8 :: AvgQxxminyyTmp, VarQxxminyyTmp, delQxxminyy
+        !shared variables created using save
+        real*8, save :: AvgEta, VarEta, AvgPsi, VarPsi, AvgPsi2, VarPsi2
+        real*8, save :: AvgQl2, VarQl2, AvgF, VarF, AvgS, VarS
+        real*8, save:: AvgQxQy, VarQxQy
+        real*8, save :: AvgTauxy, VarTauxy
+        real*8, save :: AvgTauxxminyy, VarTauxxminyy
+        real*8, save :: AvgTauyyminzz, VarTauyyminzz
+        real*8, save :: AvgQxxminyy, VarQxxminyy
+        real*8, save :: CovQxyAndQxxminyy, CovTauxyAndTauxxminyy
+        real*8, save :: si
 
         ! These variables are all global and shared between threads
-        meas%Aeta = 0.D0; meas%Apsi = 0.D0; meas%Apsi2 = 0.D0
-        meas%Veta = 0.D0; meas%Vpsi = 0.D0; meas%Vpsi2 = 0.D0
-        meas%Qavg = 0.D0; meas%Vqavg = 0.D0
-        meas%S = 0.D0; meas%Serr = 0.D0
-        meas%Favg = 0.D0; meas%Ferr = 0.D0
+        AvgEta = 0.D0; VarEta = 0.D0; AvgPsi = 0.D0; VarPsi = 0.D0;
+        AvgPsi2 = 0.D0; VarPsi2 = 0.D0
+        AvgQl2 = 0.D0; VarQl2 = 0.D0; AvgF = 0.D0; VarF = 0.D0;
+        AvgS = 0.D0; VarS = 0.D0
+        AvgQxQy = 0.D0; VarQxQy = 0.D0
+        AvgTauxy = 0.D0; VarTauxy = 0.D0
+        AvgTauxxminyy = 0.D0; VarTauxxminyy = 0.D0;
+        AvgTauyyminzz = 0.D0; VarTauyyminzz = 0.D0;
+        AvgQxxminyy = 0.D0; VarQxxminyy = 0.D0;
+        si = 0.D0
 
         !These variables SHOULD(!) be private
         tau = 0.D0
-        meas_tmp%Aeta = 0.D0; meas_tmp%Apsi = 0.D0; meas_tmp%Apsi2 = 0.D0
-        meas_tmp%Veta = 0.D0; meas_tmp%Vpsi = 0.D0; meas_tmp%Vpsi2 = 0.D0
-        meas_tmp%Qavg = 0.D0; meas_tmp%Vqavg = 0.D0
-        meas_tmp%S = 0.D0; meas_tmp%Serr = 0.D0
-        meas_tmp%Favg = 0.D0; meas_tmp%Ferr = 0.D0
+        li = 0.D0 ! stands for local i, aka private increment variable for each thread
+        AvgEtaTmp = 0.D0; VarEtaTmp = 0.D0; AvgPsiTmp = 0.D0; VarPsiTmp = 0.D0;
+        AvgPsi2Tmp = 0.D0; VarPsi2Tmp = 0.D0
+        AvgQl2Tmp = 0.D0; VarQl2Tmp = 0.D0; AvgFTmp = 0.D0; VarFTmp = 0.D0;
+        AvgSTmp = 0.D0; VarSTmp = 0.D0
+        AvgQxQyTmp = 0.D0; VarQxQyTmp = 0.D0
+        AvgTauxyTmp = 0.D0; VarTauxyTmp = 0.D0
+        AvgTauxxminyyTmp = 0.D0; VarTauxxminyyTmp = 0.D0;
+        AvgTauyyminzzTmp = 0.D0; VarTauyyminzzTmp = 0.D0;
+        AvgQxxminyyTmp = 0.D0; VarQxxminyyTmp = 0.D0;
+
 
         !$OMP DO
         do i=1,Ntraj
-            !Calculated shear-flow values
-            Ql2 = Q(1,i)**2 + Q(2,i)**2 + Q(3,i)**2
+            li = li + 1.D0
+
+            !Calculate required quantities
+            Ql2 = Q(1,i)**2.D0 + Q(2,i)**2.D0 + Q(3,i)**2.D0
             Ql = sqrt(Ql2)
-            Bs = dot_product( (/1,0,0/), Q(:,i))**2/Ql2
+            S = 0.5D0*(3.D0*dot_product( (/1,0,0/), Q(:,i))**2/Ql2-1.D0)
             F(:) = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/alpha)*Q(:,i)/Ql
             Fl2 = F(1)**2 + F(2)**2 + F(3)**2
             Fl = sqrt(Fl2)
             tau(:,:) = dyadic_prod(Q(:,i), F)
 
-            B_eta = tau(1,2)
-            Bpsi = (tau(1,1) - tau(2,2))
-            Bpsi2 = (tau(2,2) - tau(3,3))
-
-            meas_tmp%Qavg = meas_tmp%Qavg + Ql2
-            meas_tmp%Vqavg = meas_tmp%Vqavg + Ql
-            meas_tmp%S = meas_tmp%S + 0.5*(3*Bs - 1)
-            meas_tmp%Serr = meas_tmp%Serr + 0.25*(9*Bs**2 - 6*Bs + 1)
-            meas_tmp%Favg = meas_tmp%Favg + Fl2
-            meas_tmp%Ferr = meas_tmp%Ferr + Fl
+            Btauxy = tau(1,2)
+            Btauxxminyy = tau(1,1) - tau(2,2)
+            Btauyyminzz = tau(2,2) - tau(3,3)
+            Bqxy = Q(1,i)*Q(2,i)
+            Bqxxminyy = Q(1,i)*Q(1,i) - Q(2,i)*Q(2,i)
 
             !subtract equilibrium values from shear-flow values
             Ql2 = Q_eq_VR(1,i)**2 + Q_eq_VR(2,i)**2 + Q_eq_VR(3,i)**2
@@ -174,72 +366,139 @@ module Dumbbell_util
             F(:) = (Ql - Q0)/(1.0D0-(Ql-Q0)**2/alpha)*Q_eq_VR(:,i)/Ql
             tau(:,:) = dyadic_prod(Q_eq_VR(:,i), F)
 
-            B_eta = B_eta - tau(1,2)
-            Bpsi = Bpsi - (tau(1,1) - tau(2,2))
-            Bpsi2 = Bpsi2 - (tau(2,2) - tau(3,3))
+            Btauxy = Btauxy - tau(1,2)
+            Btauxxminyy = Btauxxminyy - (tau(1,1) - tau(2,2))
+            Btauyyminzz = Btauyyminzz - (tau(2,2) - tau(3,3))
+            Bqxy = Bqxy - (Q(1,i)*Q(2,i))
+            Bqxxminyy = Bqxxminyy - (Q(1,i)*Q(1,i) - Q(2,i)*Q(2,i))
 
-            meas_tmp%S = meas_tmp%S - 0.5*(3*Bs - 1)
-            meas_tmp%Serr = meas_tmp%Serr - 0.25*(9*Bs**2 - 6*Bs + 1)
-            meas_tmp%Aeta = meas_tmp%Aeta + B_eta
-            meas_tmp%Apsi = meas_tmp%Apsi + Bpsi
-            meas_tmp%Apsi2 = meas_tmp%Apsi2 + Bpsi2
-            meas_tmp%Veta = meas_tmp%Veta + B_eta**2
-            meas_tmp%Vpsi = meas_tmp%Vpsi + Bpsi**2
-            meas_tmp%Vpsi2 = meas_tmp%Vpsi2 + Bpsi2**2
+            !Calculate on-line average, variance and covariance
+            delTauxy = Btauxy - AvgTauxyTmp
+            delTauxxminyy = Btauxxminyy - AvgTauxxminyyTmp
+            delTauyyminzz = Btauyyminzz - AvgTauyyminzzTmp
+            delS = S - AvgSTmp
+            delQl2 = Ql2 - AvgQl2Tmp
+            delF = Fl - AvgFTmp
+            delQxQy = Bqxy - AvgQxQyTmp
+            delQxxminyy = Bqxxminyy - AvgQxxminyyTmp
+
+            AvgTauxyTmp = AvgTauxyTmp           + delTauxy/li
+            AvgTauxxminyyTmp = AvgTauxxminyyTmp + delTauxxminyy/li
+            AvgTauyyminzzTmp = AvgTauyyminzzTmp + delTauyyminzz/li
+            AvgSTmp = AvgSTmp                   + delS/li
+            AvgQl2Tmp = AvgQl2Tmp               + delQl2/li
+            AvgFTmp = AvgFTmp                   + delF/li
+            AvgQxQyTmp = AvgQxQyTmp             + DelQxQy/li
+            AvgQxxminyyTmp = AvgQxxminyyTmp     + delQxxminyy/li
+
+            VarTauxyTmp = VarTauxyTmp           + delTauxy*(Btauxy - AvgTauxyTmp)
+            VarTauxxminyyTmp = VarTauxxminyyTmp + delTauxxminyy*&
+                                                &(Btauxxminyy - AvgTauxxminyyTmp)
+            VarTauyyminzzTmp = VarTauyyminzzTmp + delTauyyminzz*&
+                                                &(Btauyyminzz - AvgTauyyminzzTmp)
+            VarSTmp = VarSTmp                   + delS*(S - AvgSTmp)
+            VarQl2Tmp = VarQl2Tmp               + delQl2*(Ql2 - AvgQl2Tmp)
+            VarFTmp = VarFTmp                   + delF*(Fl - AvgFTmp)
+            VarQxQyTmp = VarQxQyTmp             + DelQxQy*(Bqxy - AvgQxQyTmp)
+            VarQxxminyyTmp = VarQxxminyyTmp     + delQxxminyy*&
+                                                &(Bqxxminyy - AvgQxxminyyTmp)
+
+            CovTauxyAndTauxxminyyTmp = CovTauxyAndTauxxminyyTmp + &
+                        &(li-1.D0)/li*delTauxy*delTauxxminyy
+            CovQxyAndQxxminyyTmp = CovQxyAndQxxminyyTmp + &
+                        &(li-1.D0)/li*delQxQy*delQxxminyy
+
         end do
         !$OMP END DO
 
-        !$OMP atomic
-        meas%Aeta = meas%Aeta + meas_tmp%Aeta
-        !$OMP atomic
-        meas%Veta = meas%Veta + meas_tmp%Veta
-        !$OMP atomic
-        meas%Apsi = meas%Apsi + meas_tmp%Apsi
-        !$OMP atomic
-        meas%Vpsi = meas%Vpsi + meas_tmp%Vpsi
-        !$OMP atomic
-        meas%Apsi2 = meas%Apsi2 + meas_tmp%Apsi2
-        !$OMP atomic
-        meas%Vpsi2 = meas%Vpsi2 + meas_tmp%Vpsi2
-        !$OMP atomic
-        meas%Qavg = meas%Qavg + meas_tmp%Qavg
-        !$OMP atomic
-        meas%Vqavg = meas%Vqavg + meas_tmp%Vqavg
-        !$OMP atomic
-        meas%S = meas%S + meas_tmp%S
-        !$OMP atomic
-        meas%Serr = meas%Serr + meas_tmp%Serr
-        !$OMP atomic
-        meas%Favg = meas%Favg + meas_tmp%Favg
-        !$OMP atomic
-        meas%Ferr = meas%Ferr + meas_tmp%Ferr
+        !Combine results from threads into shared variables
+        !$OMP critical
+        delTauxy = AvgTauxyTmp - AvgTauxy
+        delTauxxminyy = AvgTauxxminyyTmp - AvgTauxxminyy
+        delTauyyminzz = AvgTauyyminzzTmp - AvgTauyyminzz
+        delS = AvgSTmp - AvgS
+        delQl2 = AvgQl2Tmp - AvgQl2
+        delF = AvgFTmp - AvgF
+        delQxQy = AvgQxQyTmp - AvgQxQy
+        delQxxminyy = AvgQxxminyyTmp - AvgQxxminyy
+
+        AvgTauxy = AvgTauxy + li*delTauxy/(li+si)
+        AvgTauxxminyy = AvgTauxxminyy + li*delTauxxminyy/(li+si)
+        AvgTauyyminzz = AvgTauyyminzz + li*delTauyyminzz/(li+si)
+        AvgS = AvgS + li*delS/(li+si)
+        AvgQl2 = AvgQl2 + li*delQl2/(li+si)
+        AvgF = AvgF + li*delF/(li+si)
+        AvgQxQy = AvgQxQy + li*delQxQy/(li+si)
+        AvgQxxminyy = AvgQxxminyy + li*delQxxminyy/(li+si)
+
+        VarTauxy = VarTauxy + VarTauxyTmp + (li*si)*delTauxy**2/(li+si)
+        VarTauxxminyy = VarTauxxminyy + VarTauxxminyyTmp +&
+                            & (li*si)*delTauxxminyy**2/(li+si)
+        VarTauyyminzz = VarTauyyminzz + VarTauyyminzzTmp +&
+                            & (li*si)*delTauyyminzz**2/(li+si)
+        VarS = VarS + VarSTmp + (li*si)*delS**2/(li+si)
+        VarQl2 = VarQl2 + VarQl2Tmp + (li*si)*delQl2**2/(li+si)
+        VarF = VarF + VarFTmp + (li*si)*delF**2/(li+si)
+        VarQxQy = VarQxQy + VarQxQyTmp + (li*si)*delQxQy**2/(li+si)
+        VarQxxminyy = VarQxxminyy + VarQxxminyyTmp + &
+                            & (li*si)*delQxxminyy**2/(li+si)
+
+        CovQxyAndQxxminyy = CovQxyAndQxxminyy + CovQxyAndQxxminyyTmp + &
+                    & delQxQy*delQxxminyy*(li*si)/(li+si)
+        CovTauxyAndTauxxminyy = CovTauxyAndTauxxminyy + CovTauxyAndTauxxminyyTmp + &
+                    & delTauxy*delTauxxminyy*(li*si)/(li+si)
+
+        si = si + li
+        !$OMP END critical
 
         !$OMP barrier
 
         !$OMP single
-        meas%Aeta = meas%Aeta/(Ntraj*sr)
-        meas%Veta = meas%Veta/(Ntraj*sr**2)
-        meas%Veta = sqrt((meas%Veta - meas%Aeta**2)/(Ntraj-1))
+        !Quantities above are technically moments, not variances
+        !We divide by N-1 to give an unbiased estimator of the variance
+        VarTauxy = VarTauxy/(Ntraj-1)
+        VarTauxxminyy = VarTauxxminyy/(Ntraj-1)
+        VarTauyyminzz = VarTauyyminzz/(Ntraj-1)
+        VarS = VarS/(Ntraj-1)
+        VarQl2 = VarQl2/(Ntraj-1)
+        VarF = VarF/(Ntraj-1)
+        VarQxQy = VarQxQy/(Ntraj-1)
+        VarQxxminyy = VarQxxminyy/(Ntraj-1)
+        CovQxyAndQxxminyy = CovQxyAndQxxminyy/(Ntraj-1)
+        CovTauxyAndTauxxminyy = CovTauxyAndTauxxminyy/(Ntraj-1)
 
-        meas%Apsi = meas%Apsi/(Ntraj*sr**2)
-        meas%Vpsi = meas%Vpsi/(Ntraj*sr**4)
-        meas%Vpsi = sqrt((meas%Vpsi - meas%Apsi**2)/(Ntraj-1))
+        !Convert from variances to standard errors
+        meas%AvgQ = sqrt(AvgQl2)
+        meas%ErrQ = 0.5D0*(1.D0/meas%AvgQ)*sqrt(VarQl2/Ntraj)
 
-        meas%Apsi2 = meas%Apsi2/(Ntraj*sr**2)
-        meas%Vpsi2 = meas%Vpsi2/(Ntraj*sr**4)
-        meas%Vpsi2 = sqrt((meas%Vpsi2 - meas%Apsi2**2)/(Ntraj-1))
+        meas%S = AvgS
+        meas%ErrS = sqrt(VarS/Ntraj)
 
-        meas%Qavg = sqrt(meas%Qavg/Ntraj)
-        meas%Vqavg = meas%Vqavg/Ntraj
-        meas%Vqavg = sqrt((meas%Qavg**2 - meas%Vqavg**2)/(Ntraj-1))
+        meas%AvgF = AvgF
+        meas%ErrF = sqrt(VarF/Ntraj)
 
-        meas%Favg = sqrt(meas%Favg/Ntraj)
-        meas%Ferr= meas%Ferr/Ntraj
-        meas%Ferr = sqrt((meas%Favg**2 - meas%Ferr**2)/(Ntraj-1))
+        meas%AvgEta = AvgTauxy/sr
+        meas%ErrEta = sqrt(VarTauxy/(Ntraj*sr**2))
 
-        meas%S = meas%S/Ntraj
-        meas%Serr = meas%Serr/Ntraj
-        meas%Serr = sqrt((meas%Serr - meas%S**2)/(Ntraj-1))
+        meas%AvgPsi = AvgTauxxminyy/sr**2
+        meas%ErrPsi = sqrt(VarTauxxminyy/(Ntraj*sr**4))
+
+        meas%AvgPsi2 = AvgTauyyminzz/sr**2
+        meas%ErrPsi2 = sqrt(VarTauyyminzz/(Ntraj*sr**4))
+
+        inTan = 2.D0*AvgTauxy/(AvgTauxxminyy)
+        meas%AvgChiTau = 0.5D0*atan(inTan)
+        meas%ErrChiTau = 0.5D0*abs(inTan)/(1.D0+inTan**2)*&
+                        &sqrt(VarTauxxminyy/AvgTauxxminyy**2 +&
+                            & VarTauxy/AvgTauxy**2 - &
+                            & 2.D0*CovTauxyAndTauxxminyy/(AvgTauxy*AvgTauxxminyy))
+
+        inTan = 2.D0*AvgQxQy/AvgQxxminyy
+        meas%AvgChiG = 0.5D0*atan(inTan)
+        meas%ErrChiG = 0.5D0*abs(inTan)/(1.D0+inTan**2)*&
+                        sqrt(VarQxxminyy/AvgQxxminyy**2 +&
+                            & VarTauxy/AvgQxQy**2 - &
+                            & 2.D0*CovQxyAndQxxminyy/(AvgQxQy*AvgQxxminyy))
         !$OMP end single
 
     end subroutine

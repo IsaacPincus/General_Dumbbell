@@ -237,12 +237,12 @@ program General_Dumbbell
 
         121 format(E11.4, 2X, E15.8, 2X, E15.8)
         !$OMP single
-        write(19,121) NoSteps*dt, out_var%Favg, out_var%Ferr
-        write(20,121) NoSteps*dt, out_var%Qavg, out_var%Vqavg
-        write(21,121) NoSteps*dt, out_var%S, out_var%Serr
-        write(22,121) NoSteps*dt, out_var%Aeta, out_var%Veta
-        write(23,121) NoSteps*dt, out_var%Apsi, out_var%Vpsi
-        write(24,121) NoSteps*dt, out_var%Apsi2, out_var%Vpsi2
+        write(19,121) NoSteps*dt, out_var%AvgF, out_var%ErrF
+        write(20,121) NoSteps*dt, out_var%AvgQ, out_var%ErrQ
+        write(21,121) NoSteps*dt, out_var%S, out_var%ErrS
+        write(22,121) NoSteps*dt, out_var%AvgEta, out_var%ErrEta
+        write(23,121) NoSteps*dt, out_var%AvgPsi, out_var%ErrPsi
+        write(24,121) NoSteps*dt, out_var%AvgPsi2, out_var%ErrPsi2
         !$OMP end single
 
     end subroutine
@@ -254,12 +254,12 @@ program General_Dumbbell
 
         121 format(E11.4, 2X, E15.8, 2X, E15.8)
         !$OMP single
-        write(19,121) NoSteps*dt, out_var%Favg, out_var%Ferr
-        write(20,121) NoSteps*dt, out_var%Qavg, out_var%Vqavg
-        write(21,121) NoSteps*dt, out_var%S, out_var%Serr
-        write(22,121) NoSteps*dt, out_var%Aeta, out_var%Veta
-        write(23,121) NoSteps*dt, out_var%Apsi, out_var%Vpsi
-        write(24,121) NoSteps*dt, out_var%Apsi2, out_var%Vpsi2
+        write(19,121) NoSteps*dt, out_var%AvgF, out_var%ErrF
+        write(20,121) NoSteps*dt, out_var%AvgQ, out_var%ErrQ
+        write(21,121) NoSteps*dt, out_var%S, out_var%ErrS
+        write(22,121) NoSteps*dt, out_var%AvgEta, out_var%ErrEta
+        write(23,121) NoSteps*dt, out_var%AvgPsi, out_var%ErrPsi
+        write(24,121) NoSteps*dt, out_var%AvgPsi2, out_var%ErrPsi2
         !$OMP end single
 
     end subroutine
