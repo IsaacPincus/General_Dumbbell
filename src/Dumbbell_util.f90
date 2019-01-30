@@ -273,14 +273,16 @@ module Dumbbell_util
         meas%ErrChiTau = 0.5D0*abs(inTan)/(1.D0+inTan**2)*&
                         &sqrt(VarTauxxminyy/AvgTauxxminyy**2 +&
                             & VarTauxy/AvgTauxy**2 - &
-                            & 2.D0*CovTauxyAndTauxxminyy/(AvgTauxy*AvgTauxxminyy))
+                            & 2.D0*CovTauxyAndTauxxminyy/(AvgTauxy*AvgTauxxminyy))/&
+                            & sqrt(dble(Ntraj))
 
         inTan = 2.D0*AvgQxQy/AvgQxxminyy
         meas%AvgChiG = 0.5D0*atan(inTan)
         meas%ErrChiG = 0.5D0*abs(inTan)/(1.D0+inTan**2)*&
                         sqrt(VarQxxminyy/AvgQxxminyy**2 +&
                             & VarTauxy/AvgQxQy**2 - &
-                            & 2.D0*CovQxyAndQxxminyy/(AvgQxQy*AvgQxxminyy))
+                            & 2.D0*CovQxyAndQxxminyy/(AvgQxQy*AvgQxxminyy))/&
+                            & sqrt(dble(Ntraj))
         !$OMP end single
 
     end subroutine
@@ -369,8 +371,8 @@ module Dumbbell_util
             Btauxy = Btauxy - tau(1,2)
             Btauxxminyy = Btauxxminyy - (tau(1,1) - tau(2,2))
             Btauyyminzz = Btauyyminzz - (tau(2,2) - tau(3,3))
-            Bqxy = Bqxy - (Q(1,i)*Q(2,i))
-            Bqxxminyy = Bqxxminyy - (Q(1,i)*Q(1,i) - Q(2,i)*Q(2,i))
+            Bqxy = Bqxy - (Q_eq_VR(1,i)*Q_eq_VR(2,i))
+            Bqxxminyy = Bqxxminyy - (Q_eq_VR(1,i)*Q_eq_VR(1,i) - Q_eq_VR(2,i)*Q_eq_VR(2,i))
 
             !Calculate on-line average, variance and covariance
             delTauxy = Btauxy - AvgTauxyTmp
@@ -491,14 +493,16 @@ module Dumbbell_util
         meas%ErrChiTau = 0.5D0*abs(inTan)/(1.D0+inTan**2)*&
                         &sqrt(VarTauxxminyy/AvgTauxxminyy**2 +&
                             & VarTauxy/AvgTauxy**2 - &
-                            & 2.D0*CovTauxyAndTauxxminyy/(AvgTauxy*AvgTauxxminyy))
+                            & 2.D0*CovTauxyAndTauxxminyy/(AvgTauxy*AvgTauxxminyy))/&
+                            & sqrt(dble(Ntraj))
 
         inTan = 2.D0*AvgQxQy/AvgQxxminyy
         meas%AvgChiG = 0.5D0*atan(inTan)
         meas%ErrChiG = 0.5D0*abs(inTan)/(1.D0+inTan**2)*&
                         sqrt(VarQxxminyy/AvgQxxminyy**2 +&
                             & VarTauxy/AvgQxQy**2 - &
-                            & 2.D0*CovQxyAndQxxminyy/(AvgQxQy*AvgQxxminyy))
+                            & 2.D0*CovQxyAndQxxminyy/(AvgQxQy*AvgQxxminyy))/&
+                            & sqrt(dble(Ntraj))
         !$OMP end single
 
     end subroutine

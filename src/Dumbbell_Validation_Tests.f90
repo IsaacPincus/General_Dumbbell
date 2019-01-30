@@ -7,8 +7,8 @@ Program Dumbbell_Validation_tests
     implicit none
 
     call init_fruit
-    call Validation_tests
-    !call Unit_tests
+    !call Validation_tests
+    call Unit_tests
     call fruit_summary
     call fruit_finalize
 
@@ -22,6 +22,7 @@ Program Dumbbell_Validation_tests
         call unit_test_locate()
         call unit_test_measure()
         call unit_test_measure_all_variables_no_VR()
+        call unit_test_measure_all_variables_with_VR()
         print *, ""
 
     end subroutine
@@ -259,6 +260,105 @@ Program Dumbbell_Validation_tests
 
     end subroutine
 
+    subroutine unit_test_measure_all_variables_with_VR()
+        implicit none
+        real*8, dimension(3,30) :: Q, Q_eq
+        type(measured_variables) :: output_variables
+        real*8 :: sigma, alpha, sr, time1, time2
+        integer*8 :: N, seed
+
+        N = 30
+        sigma = 15.665239548400001D0
+        alpha = 2.4539973011D-4
+        sr = 0.005D0
+        seed = 412312
+
+        Q = reshape((/ 5.543438785899431D0, -10.402170853586162D0,  10.320844780622027D0, &
+                       9.702769059757708D0, -12.175639414571998D0,  -1.817227268324901D0, &
+                     -11.893173302153242D0,  -7.511011366390604D0,  -6.905269745987831D0, &
+                     -10.344087833814578D0,  11.754784230629834D0,   0.324780392859595D0, &
+                      13.101854738650246D0,  -6.641515950155460D0,  -5.450300333615164D0, &
+                      -7.101255874171087D0,  12.661871035957237D0,  -5.879055890488128D0, &
+                       3.785195377055119D0,  11.351672697083293D0, -10.126255368223024D0, &
+                     -11.162834599985779D0, -10.236077181086715D0,  -4.025269634663749D0, &
+                      10.057392688859574D0,  -5.794391079197713D0, -10.543171863658531D0, &
+                      -0.274177517771730D0,   0.524480049998568D0, -15.661613174645945D0, &
+                       4.941799194604504D0, -11.612651233049332D0,  -9.296095567076499D0, &
+                      10.611689358556761D0,   9.924893250892564D0,  -5.845792577448453D0, &
+                      10.625826404246803D0,  -4.345548335041154D0, -10.644612279633108D0, &
+                       2.312578859666597D0, -15.487584261965582D0,  -0.071327788705253D0, &
+                     -12.503515453415714D0,   3.817103615995090D0,   8.609379306338216D0, &
+                      -1.184721776828417D0,  13.877519207069220D0,  7.170121076041205D0, &
+                      -2.499825893888357D0, -14.732985482146356D0, -4.733087231236928D0, &
+                     -13.751486472138488D0,   7.370329339771016D0,  -1.569397791691287D0, &
+                      13.323619968103518D0,   4.371114309155102D0,   7.016397013747762D0, &
+                      10.658988187230912D0,   0.640127912302644D0,  11.480046826966507D0, &
+                      -6.033269430176779D0,   8.233677403204039D0, -11.866373649718588D0, &
+                       0.341037196382751D0, -12.896816362812922D0,   8.869204274660524D0, &
+                     -13.403050184244714D0,   4.179634316157828D0,   6.918727900159459D0, &
+                       1.179986624631155D0, -11.357887857229105D0, -10.703563177325268D0, &
+                      -3.199471133801409D0,   8.608893947892446D0, -12.693348259935862D0, &
+                       6.194902552624718D0,  11.688089424576185D0,  -8.363762075217574D0, &
+                      13.549565203435876D0,   2.222923346655979D0,  -7.529195190194018D0, &
+                     -15.539768712321557D0,  -1.465318688866009D0,  -1.252789137341028D0, &
+                     -13.325359010157820D0,  -5.157877109647665D0,   6.453348518733802D0, &
+                      -6.347529139979506D0,  10.254582791728707D0,  -9.988882460573381D0/), &
+                    shape(Q))
+
+        Q_eq = generate_Q_FF(sigma, alpha, N, seed, 10000)
+
+        !$ time1 = omp_get_wtime()
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(output_variables)
+        call measure_shear_with_VR(output_variables, Q, Q_eq, sigma, alpha, sr, N)
+        !$OMP END PARALLEL
+        !$ time2 = omp_get_wtime()
+
+        print *, ""
+        print *, "time taken is ", time2-time1, "seconds"
+
+        print *, "Average eta, error eta"
+        print *, output_variables%AvgEta, output_variables%ErrEta
+
+        print *, "Average psi, error psi"
+        print *, output_variables%AvgPsi, output_variables%ErrPsi
+
+        print *, "Average psi2, error psi2"
+        print *, output_variables%AvgPsi2, output_variables%ErrPsi2
+
+        print *, "Average Ql, error Ql"
+        print *, output_variables%AvgQ, output_variables%ErrQ
+
+        print *, "Average S, error S"
+        print *, output_variables%S, output_variables%ErrS
+
+        print *, "Average chiG, error ChiG"
+        print *, output_variables%AvgChiG, output_variables%ErrChiG
+
+        print *, "Average chiTau, error ChiTau"
+        print *, output_variables%AvgChiTau, output_variables%ErrChiTau
+
+!        call assertEquals(-74.305185195104102D0, output_variables%AvgEta, 1D-5, &
+!                "Average eta != matlab average")
+!        call assertEquals(64.5448809703651D0, output_variables%ErrEta, 1D-5, &
+!                "Error eta != matlab average")
+!        call assertEquals(22940.7503883371D0, output_variables%AvgPsi, 1D-5, &
+!                "Average Psi1 != matlab average")
+!        call assertEquals(1.700507684704652D4, output_variables%ErrPsi, 1D-5, &
+!                "Error Psi1 != matlab average")
+!        call assertEquals(1.444778929686133D03, output_variables%AvgPsi2, 1D-5, &
+!                "Error Ql != matlab average")
+!        call assertEquals(7.814469868788609D03, output_variables%ErrPsi2, 1D-5, &
+!                "Error Ql != matlab average")
+!        call assertEquals(15.665802591181151D0, output_variables%AvgQ, 1D-5, &
+!                "Average Ql != matlab average")
+!        call assertEquals(0.001790858468768D0, output_variables%ErrQ, 1D-5, &
+!                "Error Ql != matlab average")
+
+
+
+    end subroutine
+
+
     subroutine Validation_tests()
         implicit none
         integer :: k, n
@@ -272,13 +372,13 @@ Program Dumbbell_Validation_tests
         print *, "Running Validation tests"
         print *, "We expect about 5% of tests to fail by chance, or ~1/20"
         print *, ""
-        call test_eq_hookean_semimp(0.001D0, 5000, 10000)
+        call test_eq_hookean_semimp(0.001D0, 5000, 100000)
         call test_Hookean_viscosity_semimp(0.001D0, 100000)
         !call test_Hookean_psi2_with_HI_semimp(0.001D0, 5000, 10000)
-        call test_eq_FENE_semimp(0.001D0, 5000, 10000)
+        call test_eq_FENE_semimp(0.001D0, 5000, 100000)
         !call test_semimp_euler_equal(0.001D0, 500, 10000)
         !call test_FENE_HI_shear_semimp_vs_Kailash_code(0.001D0, 10000, 10000)
-        call test_FF_zero_shear_viscosity(0.002D0, 10000, 5000)
+        call test_FF_zero_shear_viscosity(0.002D0, 10000, 100000)
         !call test_lookup_method(0.01D0, 1000, 10000)
 
         !p-test on likelihood of k or more 'failures' in n trials
@@ -371,14 +471,14 @@ Program Dumbbell_Validation_tests
         type(measured_variables) out_var
         !large arrays must be declared allocatable so they go into heap, otherwise
         !OpenMP threads run out of memory
-        real*8, dimension(:, :), allocatable :: Q
+        real*8, dimension(:, :), allocatable :: Q, Q_eq_VR
 
         print *, "Running sr=1 hookean dumbbell with semimp integrator test"
 
         call date_and_time(values=time)
         seed = time(8)*100 + time(7)*10
 
-        allocate(Q(3,1:Ntraj))
+        allocate(Q(3,1:Ntraj), Q_eq_VR(3,1:Ntraj))
 
         Nsteps = nint(1.D0/dt)
 
@@ -389,6 +489,7 @@ Program Dumbbell_Validation_tests
         k = sr*k
 
         Q = generate_Q_FF(0.D0, 10000.D0, Ntraj, seed, 10000)
+        Q_eq_VR = Q
 
         call cpu_time(start_time)
         !$ start_time = omp_get_wtime()
@@ -401,11 +502,12 @@ Program Dumbbell_Validation_tests
             do i = 1,Ntraj
                 dW = Wiener_step(seed, dt)
                 Q(:,i) =  step(Q(:,i), k, dt, 0.D0, 10000.D0, 0.D0, dW)
+                Q_eq_VR(:,i) = step(Q_eq_VR(:,i), dt, 0.D0, 10000.D0, 0.D0, dw)
             end do
             !$OMP END DO
         end do
 
-        call measure_shear_no_VR(out_var, Q, 0.D0, 10000.D0, sr, Ntraj)
+        call measure_shear_with_VR(out_var, Q, Q_eq_VR, 0.D0, 10000.D0, sr, Ntraj)
 
         !$OMP END parallel
 
@@ -775,7 +877,7 @@ Program Dumbbell_Validation_tests
         allocate(Q(3,1:Ntraj), Q_eq_VR(3,1:Ntraj))
 
         k(:,:) = 0.D0
-        sr = 0.0001D0
+        sr = 0.01D0
         k(1,2) = sr
 
         Q0 = 5.D0

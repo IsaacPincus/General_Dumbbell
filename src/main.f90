@@ -28,6 +28,8 @@ program General_Dumbbell
     open(unit=22, file='eta.dat')
     open(unit=23, file='psi.dat')
     open(unit=24, file='psi2.dat')
+    open(unit=40, file='chiG.dat')
+    open(unit=41, file='chiTau.dat')
 
     read (32, *) VR_opt, dist_opt, lookup_opt
     read (31, *) sr, alpha, h, Q0
@@ -225,6 +227,9 @@ program General_Dumbbell
         if (dist_opt.eq.1) then
             write(25) NoSteps*dt
             write(25) Q
+        elseif ((dist_opt.eq.2).and.(NoSteps.eq.NTimeSteps)) then
+            write(25) NoSteps*dt
+            write(25) Q
         end if
         !$OMP end single
 
@@ -243,6 +248,8 @@ program General_Dumbbell
         write(22,121) NoSteps*dt, out_var%AvgEta, out_var%ErrEta
         write(23,121) NoSteps*dt, out_var%AvgPsi, out_var%ErrPsi
         write(24,121) NoSteps*dt, out_var%AvgPsi2, out_var%ErrPsi2
+        write(40,121) NoSteps*dt, out_var%AvgChiG, out_var%ErrChiG
+        write(41,121) NoSteps*dt, out_var%AvgChiTau, out_var%ErrChiTau
         !$OMP end single
 
     end subroutine
@@ -260,6 +267,8 @@ program General_Dumbbell
         write(22,121) NoSteps*dt, out_var%AvgEta, out_var%ErrEta
         write(23,121) NoSteps*dt, out_var%AvgPsi, out_var%ErrPsi
         write(24,121) NoSteps*dt, out_var%AvgPsi2, out_var%ErrPsi2
+        write(40,121) NoSteps*dt, out_var%AvgChiG, out_var%ErrChiG
+        write(41,121) NoSteps*dt, out_var%AvgChiTau, out_var%ErrChiTau
         !$OMP end single
 
     end subroutine
