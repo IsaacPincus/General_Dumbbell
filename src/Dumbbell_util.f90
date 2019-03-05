@@ -83,9 +83,59 @@ module Dumbbell_util
         covAB = covAB/(N-1)
         !$OMP END SINGLE
 
+    end subroutine
 
+    subroutine increment_avg_and_var(var, avg, newData, N)
+        implicit none
+        real*8, intent(inout) :: var, avg
+        real*8, intent(in) :: newData
+        integer*8, intent(in) :: N
+        real*8 :: del
+
+        del = newData - avg
+        avg = avg + del/N
+        var = var + del*(newData - avg)
 
     end subroutine
+
+    subroutine increment_avg_and_covar(varA, varB, avgA, avgB, covAB, newDataA, newDataB, N)
+        implicit none
+        real*8, intent(inout) :: varA, varB, avgA, avgB, covAB
+        real*8, intent(in) :: newDataA, newDataB
+        integer*8, intent(in) :: N
+        real*8 :: delA, delB
+
+        delA = newDataA - avgA
+        delB = newDataB - avgB
+
+        avgA = avgA + delA/N
+        avgB = avgB + delB/N
+
+        varA = varA + delA*(newDataA-avgA)
+        varB = varB + delB*(newDataB-avgB)
+
+        covAB = covAB + (N-1)/(N)*delA*delB
+
+    end subroutine
+
+!    subroutine combine_avgs_and_vars(NUpdate, NAdded, UpdateAvg, AddedAvg, UpdateVar, AddedVar)
+!        implicit none
+!        real*8, intent(inout) :: UpdateAvg, UpdateVar
+!        real*8, intent(in) :: AddedAvg, AddedVar
+!        integer*8, intent(in) :: NUpdate, NAdded
+!        real*8 :: del
+!
+!        del = AddedAvg - UpdateAvg
+!        UpdateAvg = UpdateAvg + NAdded*del/(NAdded + NUpdate)
+!        UpdateVar = UpdateVar + AddedVar + (NAdded*NUpdate)*del**2/(NAdded + NUpdate)
+!
+!    end subroutine
+!
+!    subroutine combine_avgs_and_covars(Nup, Nad, upAvgA, adAvgA, upAvgB, adAvgB, upVarA, adVarA, upVarB, adVarB, upCovAB, adCovAB)
+!        implicit none
+!        real*8, intent(inout) ::
+!
+!    end subroutine
 
     subroutine measure_shear_no_VR(meas, Q, Q0, alpha, sr, Ntraj)
         implicit none

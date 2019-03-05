@@ -1,4 +1,6 @@
 function f = read_test(inputFileName, outputFileName)
+    % This function reads a dumbbell data file and re-arranges it to a form
+    % suitable for direct plotting or futher data maniou
 
     dtData = dlmread('timestepdata.inp', '');
     dt = dtData(2:end, 1)';

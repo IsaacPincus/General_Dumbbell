@@ -17,7 +17,7 @@
 warning('off', 'MATLAB:nearlySingularMatrix')
 
 %% Transient behaviour
-clear variables
+clearvars -except times chiGsdt
 
 eta = 9.5*10^-4;            %Fluid dynamic viscosity, Pa.s
 kB = 1.38064852*10^-23;     %Boltzmann constant, m^2 kg s^-2 K^-1
@@ -44,20 +44,20 @@ zeta = 6*pi*eta*a;          %Stokes law friction factor, Pa.s.m
 h = (3*a)/(4*L);            %Hydrodynamic interaction parameter
 lambda = (zeta*L^2)/(kB*T);
 Wi = k*lambda;
-Wi = 1;
-h = 3/8;
+Wi = 500;
+h = 0.375;
 mu1 = 1-h*(1+32/27*h^2);
 mu2 = 1-2*h*(1-32/27*h^2);
 
 %N must be even! Order of expansion of spherical harmonics
 N = 20;
 % tauspan = [0 1];
-tauspan = linspace(0,1,50);
+tauspan = linspace(0,0.2,150);
 A_0 = zeros((N/2+1)*((N/2+1)+1),1);
 A_0(1) = 1;
 
 %Perform integration of system of ODEs
-[tau, A] = ode15s(@(tau,A) psi_harmonics(tau,A,N,Wi,mu1), tauspan, A_0);
+[tau, A] = ode45(@(tau,A) psi_harmonics(tau,A,N,Wi,mu1), tauspan, A_0);
 
 % tau_red = tau(1:ceil(length(tau)/50):end);
 
@@ -88,78 +88,78 @@ for i = 1:length(tau)
 
     S_tau(i) = 0.5*(3*cos(chi_tau(i))^2-1);
     
-    chi_G(i) = (1/2)*atan((6/5)*get_A(ha,1,2,2,N)/(1-(1/5)*get_A(ha,0,2,0,N)));
+    chi_G(i) = (1/2)*atan(get_A(ha,1,2,2,N)/(get_A(ha,0,2,2,N)));
     
     S_G(i) = 0.5*(3*cos(chi_G(i))^2-1);
                     
 end
 
-figure();
-axes1 = gca;
-hold(axes1,'on');
-box(axes1,'on');
-set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
-pbaspect([1. 1. 1]);
-xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 20')
-ylabel('$S$', 'Interpreter', 'latex', 'FontSize', 20')
-hold on
-e1 = plot(tau, S, 'bo', 'DisplayName','S-parameter','LineWidth',2);
-e1.MarkerFaceColor='b';
-e1.MarkerSize=10;
-e1 = plot(tau, S_tau, 'r>', 'DisplayName','S_tau-parameter','LineWidth',2);
-e1.MarkerFaceColor='r';
-e1.MarkerSize=10;
-e1 = plot(tau, S_G, 'gs', 'DisplayName','S_G-parameter','LineWidth',2);
-e1.MarkerFaceColor='g';
-e1.MarkerSize=10;
-dim = [0.55 0.15 0.3 0.3];
-str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
-    ,['$h = $' num2str(h)]};
-annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
-hold off
-
-figure();
-axes1 = gca;
-hold(axes1,'on');
-box(axes1,'on');
-set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
-pbaspect([1. 1. 1]);
-xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 20')
-ylabel('$S$', 'Interpreter', 'latex', 'FontSize', 20')
-hold on
-e1 = plot(tau, cos(chi_tau).^2, 'r>', 'DisplayName','chi_tau','LineWidth',2);
-e1.MarkerFaceColor='r';
-e1.MarkerSize=10;
-e1 = plot(tau, cos(chi_G).^2, 'gs', 'DisplayName','chi_g','LineWidth',2);
-e1.MarkerFaceColor='g';
-e1.MarkerSize=10;
-e1 = plot(tau, sc, 'bh', 'DisplayName','cos^2','LineWidth',2);
-e1.MarkerFaceColor='b';
-e1.MarkerSize=10;
-dim = [0.55 0.15 0.3 0.3];
-str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
-    ,['$h = $' num2str(h)]};
-annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
-hold off
-
 % figure();
-% set(gcf, 'Position', [500 400 1000 700])
 % axes1 = gca;
-% % axes1.XScale = 'log';
 % hold(axes1,'on');
 % box(axes1,'on');
 % set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
 % pbaspect([1. 1. 1]);
-% ylim([0 max(eta_p)*1.1]);
-% % hold on
-% % yyaxis(axes1, 'left')
-% % axes1.YAxis(1).Color = 'b';
-% xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 24)
-% ylabel('$\frac{(\eta - \eta_s)}{nkT\lambda}$', 'Interpreter', 'latex', 'FontSize', 32)
-% e1 = plot(tau,eta_p,'bo', 'DisplayName','Viscosity','LineWidth',2);
+% xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 20')
+% ylabel('$S$', 'Interpreter', 'latex', 'FontSize', 20')
+% hold on
+% e1 = plot(tau, S, 'bo', 'DisplayName','S-parameter','LineWidth',2);
 % e1.MarkerFaceColor='b';
 % e1.MarkerSize=10;
+% e1 = plot(tau, S_tau, 'r>', 'DisplayName','S_tau-parameter','LineWidth',2);
+% e1.MarkerFaceColor='r';
+% e1.MarkerSize=10;
+% e1 = plot(tau, S_G, 'gs', 'DisplayName','S_G-parameter','LineWidth',2);
+% e1.MarkerFaceColor='g';
+% e1.MarkerSize=10;
+% dim = [0.55 0.15 0.3 0.3];
+% str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
+%     ,['$h = $' num2str(h)]};
+% annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
 % hold off
+
+figure();
+axes1 = gca;
+hold(axes1,'on');
+box(axes1,'on');
+set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
+pbaspect([1. 1. 1]);
+xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 20')
+ylabel('$S$', 'Interpreter', 'latex', 'FontSize', 20')
+hold on
+e1 = plot(tau, chi_tau, 'r>', 'DisplayName','chi_tau','LineWidth',2);
+e1.MarkerFaceColor='r';
+e1.MarkerSize=10;
+e1 = plot(tau, chi_G, 'gs', 'DisplayName','chi_g','LineWidth',2);
+e1.MarkerFaceColor='g';
+e1.MarkerSize=10;
+% e1 = plot(tau, sc, 'bh', 'DisplayName','cos^2','LineWidth',2);
+% e1.MarkerFaceColor='b';
+% e1.MarkerSize=10;
+dim = [0.55 0.15 0.3 0.3];
+str = {['$N = $' num2str(N)], ['$\dot{\gamma}\lambda = $' num2str(Wi)]...
+    ,['$h = $' num2str(h)]};
+annotation('textbox',dim,'String',str,'FitBoxToText','on','Interpreter','latex','FontSize',16);
+hold off
+
+figure();
+set(gcf, 'Position', [500 400 1000 700])
+axes1 = gca;
+% axes1.XScale = 'log';
+hold(axes1,'on');
+box(axes1,'on');
+set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
+pbaspect([1. 1. 1]);
+ylim([0 max(eta_p)*1.1]);
+% hold on
+% yyaxis(axes1, 'left')
+% axes1.YAxis(1).Color = 'b';
+xlabel('time ($t/\lambda$)', 'Interpreter', 'latex', 'FontSize', 24)
+ylabel('$\frac{(\eta - \eta_s)}{nkT\lambda}$', 'Interpreter', 'latex', 'FontSize', 32)
+e1 = plot(tau,eta_p,'bo', 'DisplayName','Viscosity','LineWidth',2);
+e1.MarkerFaceColor='b';
+e1.MarkerSize=10;
+hold off
 % 
 % hold on
 % yyaxis(axes1, 'right')
@@ -253,7 +253,7 @@ hold off
 %% Steady state calculations
 clear variables
 h_vals = [0 1/8 2/8 3/8];
-Wi_vals = logspace(-1,3, 20);
+Wi_vals = logspace(-1,3, 1000);
 %N must be even!!
 N = 40;
 
@@ -286,7 +286,7 @@ for i = 1:length(Wi_vals)
     end
 end
 
-figure();
+% figure();
 hold on
 axes1 = gca;
 fsize=20;
@@ -298,11 +298,11 @@ set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
 % as needed.
 axes1.XScale='log';
 axes1.YScale='log';
-e1 = plot(Wi_vals, eta(:,1), 'bd-', ...
+e1 = plot(Wi_vals, eta(:,1), 'b-', ...
         'DisplayName','h = 0','LineWidth',2);
 e1.MarkerFaceColor='b';
 e1.MarkerSize=14;
-e1 = plot(Wi_vals, eta(:,end), 'ro-', ...
+e1 = plot(Wi_vals, eta(:,end), 'r-', ...
         'DisplayName','h = 3/8','LineWidth',2);
 e1.MarkerFaceColor='r';
 e1.MarkerSize=14;

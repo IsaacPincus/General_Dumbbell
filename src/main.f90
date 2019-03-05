@@ -282,6 +282,8 @@ program General_Dumbbell
         write(22,'(E11.4)') dt
         write(23,'(E11.4)') dt
         write(24,'(E11.4)') dt
+        write(40,'(E11.4)') dt
+        write(41,'(E11.4)') dt
 
     end subroutine
 

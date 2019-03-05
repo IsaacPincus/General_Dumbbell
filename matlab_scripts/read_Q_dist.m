@@ -17,6 +17,7 @@ fid = fopen(file, 'rb');
 
 for i=1:length(dt)
     % read the first timestep width
+    fprintf('Reading dt = %d \n', dt(i));
     hr1 = fread(fid, 1, 'int32');
     dt_check(i) = fread(fid, 1, 'float64');
     hr1 = fread(fid, 1, 'int32');
@@ -30,10 +31,16 @@ for i=1:length(dt)
     
     % Run loop over timesteps
     for j=1:size_steps
+        
+        
         % read the first timestep
         hr1 = fread(fid, 1, 'int32');
         t(i,j) = fread(fid, 1, 'float64');
         hr1 = fread(fid, 1, 'int32');
+        
+        if (mod(j,10)==1)
+            fprintf('reading t = %d \n', t(i,j));
+        end
 
         % read the first set of data
         hrd = fread(fid, 1, 'int32');
