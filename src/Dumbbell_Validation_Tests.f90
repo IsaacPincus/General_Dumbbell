@@ -7,8 +7,8 @@ Program Dumbbell_Validation_tests
     implicit none
 
     call init_fruit
-    !call Validation_tests
-    call Unit_tests
+    call Validation_tests
+    !call Unit_tests
     call fruit_summary
     call fruit_finalize
 
@@ -19,10 +19,11 @@ Program Dumbbell_Validation_tests
 
         print *, "Running unit tests"
 
-        call unit_test_locate()
-        call unit_test_measure()
-        call unit_test_measure_all_variables_no_VR()
-        call unit_test_measure_all_variables_with_VR()
+        !call unit_test_locate()
+        !call unit_test_measure()
+        !call unit_test_measure_all_variables_no_VR()
+        !call unit_test_measure_all_variables_with_VR()
+        call unit_test_print_norm_dist()
         print *, ""
 
     end subroutine
@@ -358,6 +359,50 @@ Program Dumbbell_Validation_tests
 
     end subroutine
 
+    subroutine unit_test_print_norm_dist()
+        implicit none
+        integer*8 :: seed
+        real*8 :: dt
+        real*8, dimension(3) :: dW
+        integer :: i
+        real*8 :: start_time, stop_time
+
+        seed = 412389123
+        dt = 1.D0
+
+        open(unit=19, file='norm_dist.dat')
+        open(unit=20, file='fake_dist.dat')
+
+
+        ! correct normal dist
+        call cpu_time(start_time)
+
+        do i=1,100000000
+            dW = Wiener_step(seed, dt)
+            !write (20, *) dW
+        end do
+
+
+
+        call cpu_time(stop_time)
+        print *, "Run time FF:", &
+                stop_time - start_time, "seconds"
+
+        ! 'fake' normal dist
+        call cpu_time(start_time)
+
+        do i=1,100000000
+            dW = Wiener_step(seed, dt)
+            !write (19, *) dW
+        end do
+
+        call cpu_time(stop_time)
+        print *, "Run time FF:", &
+                stop_time - start_time, "seconds"
+
+
+    end subroutine
+
 
     subroutine Validation_tests()
         implicit none
@@ -374,12 +419,13 @@ Program Dumbbell_Validation_tests
         print *, ""
         call test_eq_hookean_semimp(0.001D0, 5000, 100000)
         call test_Hookean_viscosity_semimp(0.001D0, 100000)
-        !call test_Hookean_psi2_with_HI_semimp(0.001D0, 5000, 10000)
+        call test_Hookean_psi2_with_HI_semimp(0.001D0, 5000, 10000)
         call test_eq_FENE_semimp(0.001D0, 5000, 100000)
-        !call test_semimp_euler_equal(0.001D0, 500, 10000)
-        !call test_FENE_HI_shear_semimp_vs_Kailash_code(0.001D0, 10000, 10000)
+        call test_semimp_euler_equal(0.001D0, 500, 10000)
+        call test_FENE_HI_shear_semimp_vs_Kailash_code(0.001D0, 10000, 10000)
         call test_FF_zero_shear_viscosity(0.002D0, 10000, 100000)
-        !call test_lookup_method(0.01D0, 1000, 10000)
+        call test_lookup_method(0.01D0, 1000, 10000)
+        call test_FF_Fraenkel_for_Fraenkel(0.001D0, 2000, 100000)
 
         !p-test on likelihood of k or more 'failures' in n trials
         call get_failed_count(k)
@@ -395,6 +441,108 @@ Program Dumbbell_Validation_tests
           n, " tests, assuming the underlying failure probability is 5% (2 sigma)"
         print *, ""
 
+    end subroutine
+
+    subroutine test_FF_Fraenkel_for_Fraenkel(dt, Nsteps, Ntraj)
+        implicit none
+        integer*8, intent(in) :: Nsteps, Ntraj
+        real*8, intent(in) :: dt
+        integer*8 :: steps, time(1:8), seed, i
+        real*8 :: start_time, stop_time, dW(3), k(3,3)
+        type(measured_variables) out_var_FF, out_var_Fr
+        !large arrays must be declared allocatable so they go into heap, otherwise
+        !OpenMP threads run out of memory
+        real*8, dimension(:, :), allocatable :: Q
+        real*8 :: sigma, a, h, sr
+
+        print *, "Running zero-shear hookean dumbbell with semimp integrator test"
+
+        call date_and_time(values=time)
+        seed = time(8)*100 + time(7)*10
+
+        allocate(Q(3,1:Ntraj))
+
+        sr = 10.D0
+        k(:,:) = 0.D0
+        k(1,2) = sr
+        sigma = 5.D0
+        h = 0.15D0
+        a = h*sqrt(PI)
+
+        Q = generate_Q_FF(sigma, 100000.D0, Ntraj, seed, 10000)
+
+        call cpu_time(start_time)
+        !$ start_time = omp_get_wtime()
+
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var_FF)
+        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
+
+        do steps = 1,Nsteps
+            !$OMP DO
+            do i = 1,Ntraj
+                dW = Wiener_step(seed, dt)
+                Q(:,i) =  step(Q(:,i), k, dt, sigma, 10000000.D0, a, dW)
+            end do
+            !$OMP END DO
+
+        end do
+
+        call measure_shear_no_VR(out_var_FF, Q, sigma, 100000.D0, sr, Ntraj)
+
+        !$OMP END parallel
+
+        call cpu_time(stop_time)
+        !$ stop_time = omp_get_wtime()
+        print *, "Run time FF:", &
+                stop_time - start_time, "seconds"
+
+        Q = generate_Q_FF(sigma, 100000.D0, Ntraj, seed, 10000)
+
+        call cpu_time(start_time)
+        !$ start_time = omp_get_wtime()
+
+        !$OMP PARALLEL DEFAULT(firstprivate) SHARED(Q, out_var_Fr)
+        !$ seed = seed + 932117 + OMP_get_thread_num()*2685821657736338717_8
+
+        do steps = 1,Nsteps
+            !$OMP DO
+            do i = 1,Ntraj
+                dW = Wiener_step(seed, dt)
+                Q(:,i) =  step(Q(:,i), k, dt, a, sigma, dW)
+            end do
+            !$OMP END DO
+
+        end do
+
+        call measure_shear_no_VR(out_var_Fr, Q, sigma, 100000.D0, sr, Ntraj)
+
+        !$OMP END parallel
+
+        call cpu_time(stop_time)
+        !$ stop_time = omp_get_wtime()
+        print *, "Run time Fr:", &
+                stop_time - start_time, "seconds"
+
+        print *, "Q_FF - Q_Fr = ", (out_var_FF%AvgQ-out_var_Fr%AvgQ), &
+                 " +- ", sqrt(out_var_FF%ErrQ**2 + out_var_Fr%ErrQ**2)
+        print *, "S_FF = ", out_var_FF%S, " +- ", out_var_FF%ErrS
+        print *, "S_Fr = ", out_var_Fr%S, " +- ", out_var_Fr%ErrS
+        print *, "chi_G_FF = ", (out_var_FF%AvgChiG), " +- ", out_var_FF%ErrChiG
+        print *, "chi_G_Fr = ", (out_var_Fr%AvgChiG), " +- ", out_var_Fr%ErrChiG
+        print *, "chi_tau_FF = ", (out_var_FF%AvgChiTau), " +- ", out_var_FF%ErrChiTau
+        print *, "chi_tau_Fr = ", (out_var_Fr%AvgChiTau), " +- ", out_var_Fr%ErrChiTau
+!
+!        !Check that both AvgQ and S are within acceptable range
+!        call assertEquals(sqrt(3.D0), out_var%AvgQ, out_var%ErrQ*2.D0, &
+!                          "AvgQ != sqrt(3) for sr=0 Hookean Dumbbell (semimp)")
+!        call assertEquals(0.D0, out_var%S, out_var%ErrS*2.D0, &
+!                          "S != 0 for sr=0 Hookean Dumbbell (semimp)")
+
+
+
+        deallocate(Q)
+
+        print *, ""
     end subroutine
 
     subroutine test_eq_hookean_semimp(dt, Nsteps, Ntraj)

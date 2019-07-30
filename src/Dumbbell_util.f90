@@ -579,6 +579,17 @@ module Dumbbell_util
 
     end function rand_floats
 
+    function rand_float(seed)
+        implicit none
+        integer*8, intent(inout) :: seed
+        real*8 :: rand_float
+        integer :: i
+
+        seed = shift_xor(shift_xor(shift_xor(seed, 13_8),-17_8),43_8)
+        rand_float = seed * 2685821657736338717_8 * 5.42101086242752217D-20 + 0.5D0
+
+    end function rand_float
+
     function Wiener_step(seed, dt)
         implicit none
         integer*8, intent(inout) :: seed
@@ -600,11 +611,61 @@ module Dumbbell_util
 
     end function Wiener_step
 
-!    function rand_norm(seed)
-!        implicit none
+    function Wiener_step_norm(seed, dt)
+        implicit none
+        integer*8, intent(inout) :: seed
+        real*8, intent(in) :: dt
+        real*8, dimension(3) :: Wiener_step_norm
+        real*8, dimension(3) :: dW
+        integer :: i
+
+        do i=1,3
+            Wiener_step_norm(i) = rand_norm(seed)*sqrt(dt)
+        end do
+
+    end function
+
+    function rand_norm(seed)
+        implicit none
+        integer*8, intent(inout) :: seed
+        real*8 :: rand_norm
+        real*8 :: u, v
+        real*8, save :: second_rand
+        integer, save :: avail_flag = 0
+
+        if (avail_flag.eq.1) then
+            rand_norm = second_rand
+            avail_flag = 0
+            return
+        end if
+
+        avail_flag = 1
+
+        u = rand_float(seed)
+        v = rand_float(seed)
+
+        second_rand = sqrt(-2.D0*log(u))*cos(2.D0*PI*v)
+        rand_norm = sqrt(-2.D0*log(u))*sin(2.D0*PI*v)
+
+!        u = rand_float(seed)
+!        v = 1.7156D0*(rand_float(seed) - 0.5D0)
+!        x = u - 0.449871D0
+!        y = abs(v) + 0.386595D0
+!        q = sqrt(x) + y*(0.19600D0*y - 0.25472D0*x)
 !
+!        do while ((q > 0.27597D0).AND.((q > 0.27846D0).OR.(sqrt(v) > (-4.D0*log(u)*sqrt(u)))))
 !
-!    end function
+!            u = rand_float(seed)
+!            v = 1.7156D0*(rand_float(seed) - 0.5D0)
+!            x = u - 0.449871D0
+!            y = abs(v) + 0.386595D0
+!            q = sqrt(x) + y*(0.19600D0*y - 0.25472D0*x)
+!
+!        end do
+!
+!        rand_norm = v/u
+
+    end function
 
     pure function find_roots(a, b, c, lower_bound, upper_bound)
         implicit none

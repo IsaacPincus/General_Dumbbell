@@ -44,7 +44,7 @@ zeta = 6*pi*eta*a;          %Stokes law friction factor, Pa.s.m
 h = (3*a)/(4*L);            %Hydrodynamic interaction parameter
 lambda = (zeta*L^2)/(kB*T);
 Wi = k*lambda;
-Wi = 500;
+Wi = 50;
 h = 0.375;
 mu1 = 1-h*(1+32/27*h^2);
 mu2 = 1-2*h*(1-32/27*h^2);
@@ -52,12 +52,12 @@ mu2 = 1-2*h*(1-32/27*h^2);
 %N must be even! Order of expansion of spherical harmonics
 N = 20;
 % tauspan = [0 1];
-tauspan = linspace(0,0.2,150);
+tauspan = linspace(0,1,150);
 A_0 = zeros((N/2+1)*((N/2+1)+1),1);
 A_0(1) = 1;
 
 %Perform integration of system of ODEs
-[tau, A] = ode45(@(tau,A) psi_harmonics(tau,A,N,Wi,mu1), tauspan, A_0);
+[tau, A] = ode15s(@(tau,A) psi_harmonics(tau,A,N,Wi,mu1), tauspan, A_0);
 
 % tau_red = tau(1:ceil(length(tau)/50):end);
 
@@ -252,8 +252,35 @@ hold off
 
 %% Steady state calculations
 clear variables
+
+% FF spring zero-shear viscosity
+a_vals = [2.66666666666667E-08 6.66666666666667E-08 1.33333333333333E-07 2E-07 3.33333333333333E-07 5E-07];
+for i=1:length(a_vals)
+    a = a_vals(i);
+    sigma = 1.00E-06;
+    dQ = 1E-7;
+    H = 8.14996821356E-07;
+    kB_T = 1.38064852*10^-23*(293.15);
+    eta = 9.5*10^-4;
+    c = (H*dQ^2)/(2*kB_T);
+
+    omega = preAveragedRPY_HI(a, H, dQ, sigma);
+    zeta = 6*pi*eta*a;
+
+    Q2_eq = (3*dQ^4 + 6*(5+2*c)*dQ^2*sigma^2+(5+2*c)*(3+2*c)*sigma^4)/...
+             ((5+2*c)*(dQ^2+(3+2*c)*sigma^2));
+
+    zeta_HI = 1/(1/zeta-omega);
+
+    eta0_p = zeta_HI*Q2_eq/12;
+
+    eta0_p_rodlike(i) = eta0_p/(sigma^2*zeta);
+end
+
+% Rodlike viscosity scaling
+
 h_vals = [0 1/8 2/8 3/8];
-Wi_vals = logspace(-1,3, 1000);
+Wi_vals = logspace(-3,3, 40);
 %N must be even!!
 N = 40;
 
@@ -286,7 +313,7 @@ for i = 1:length(Wi_vals)
     end
 end
 
-% figure();
+figure();
 hold on
 axes1 = gca;
 fsize=20;
@@ -298,14 +325,34 @@ set(axes1,'FontSize',16,'LineWidth',2,'TickLength',[0.015 0.025]);
 % as needed.
 axes1.XScale='log';
 axes1.YScale='log';
-e1 = plot(Wi_vals, eta(:,1), 'b-', ...
-        'DisplayName','h = 0','LineWidth',2);
+e1 = plot(Wi_vals, eta(:,1), 'b--', ...
+        'DisplayName','Rod, h = 0','LineWidth',2);
 e1.MarkerFaceColor='b';
 e1.MarkerSize=14;
-e1 = plot(Wi_vals, eta(:,end), 'r-', ...
-        'DisplayName','h = 3/8','LineWidth',2);
+e1 = plot(Wi_vals, eta(:,2), 'r--', ...
+        'DisplayName','Rod, h = 1/8','LineWidth',2);
 e1.MarkerFaceColor='r';
 e1.MarkerSize=14;
+e1 = plot(Wi_vals, eta(:,3), 'g--', ...
+        'DisplayName','Rod, h = 2/8','LineWidth',2);
+e1.MarkerFaceColor='g';
+e1.MarkerSize=14;
+e1 = plot(Wi_vals, eta(:,4), 'm--', ...
+        'DisplayName','Rod, h = 3/8','LineWidth',2);
+e1.MarkerFaceColor='m';
+e1.MarkerSize=14;
+
+FF_strings = ["FF Spring, h=0", "FF Spring, h=1/8", "FF Spring, h=2/8",...
+    "FF Spring, h=3/8"];
+line_colours = ["b", "r", "g", "m"];
+
+for i=1:length(a_vals)
+    line([min(Wi_vals) max(Wi_vals)], [eta0_p_rodlike(i) eta0_p_rodlike(i)],...
+        'DisplayName', FF_strings(i), 'color', line_colours(i));
+end
+
+ylim([min(eta(:,1))*0.9, max(eta(:,4))*1.1]);
+
 [h,icons,plots,legend_text]=legend({},'Location','southwest','FontSize',16,...
     'Interpreter','latex','Box','off');
 xlabel('$\dot{\gamma}\lambda$', 'Interpreter', 'latex', 'FontSize', 24)

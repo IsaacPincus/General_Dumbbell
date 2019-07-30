@@ -9,6 +9,7 @@ module Integrate
         module procedure step_Euler_Hookean
         module procedure step_semimp_FF_lookup
         module procedure step_semimp_FF_lookup_eq
+        module procedure step_Euler_Fraenkel
     end interface
 
     contains
@@ -82,6 +83,26 @@ module Integrate
 
         step_Euler_Hookean = Q + (ten_vec_dot(k, Q) - 0.5*ten_vec_dot(BdotB,Q))*dt &
                                + ten_vec_dot(B, dW)
+
+    end function
+
+    function step_Euler_Fraenkel(Q, k, dt, a, sigma, dW)
+        implicit none
+        real*8, intent(in) :: Q(3), k(3,3), dt, a, sigma, dW(3)
+        real*8 :: F(3), Ql
+        real*8, dimension(3,3) :: B, BdotB
+        real*8, dimension(3) :: step_Euler_Fraenkel
+
+        B = construct_B_RPY(Q, a)
+
+        BdotB = matmul(B, B)
+
+        Ql = sqrt(Q(1)**2 + Q(2)**2 + Q(3)**2)
+
+        F = (Ql-sigma)*Q/Ql
+
+        step_Euler_Fraenkel = Q + (ten_vec_dot(k,Q) - 0.5*ten_vec_dot(BdotB, F))*dt &
+                                + ten_vec_dot(B, dW)
 
     end function
 

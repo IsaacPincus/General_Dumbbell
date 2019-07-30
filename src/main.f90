@@ -7,7 +7,8 @@ program General_Dumbbell
 
     integer*8 :: Nsteps, steps, time(1:8), seed, i, Ntraj, VR_opt, dist_opt, lookup_opt
     integer :: NTimeSteps, timestep, Ndtwidths, Nvals
-    real*8 :: sr, alpha, h, a, Q0, Nrelax_times, dt, dW(3), output_delay, k(3,3), delay_counter, YMinMax(2), Ymin, Ymax
+    real*8 :: Nrelax_times, dt, dW(3), output_delay, output_delay_dist,  delay_counter, delay_counter_dist
+    real*8 :: sr, alpha, h, a, Q0, YMinMax(2), Ymin, Ymax, k(3,3)
     type(measured_variables) :: out_var
     !large arrays must be declared allocatable so they go into heap, otherwise
     !OpenMP threads run out of memory
@@ -33,7 +34,7 @@ program General_Dumbbell
 
     read (32, *) VR_opt, dist_opt, lookup_opt
     read (31, *) sr, alpha, h, Q0
-    read (30, *) Ntraj, Ndtwidths, Nrelax_times, output_delay
+    read (30, *) Ntraj, Ndtwidths, Nrelax_times, output_delay, output_delay_dist
     allocate(timestepwidths(Ndtwidths))
     do i=1,Ndtwidths
         read(30, *) timestepwidths(i)
@@ -64,6 +65,7 @@ program General_Dumbbell
             dt = timestepwidths(timestep)
             NtimeSteps = int(Nrelax_times/dt)
             delay_counter = 0.D0
+            delay_counter_dist = 0.D0
 
             !Also works for Fraenkel, FENE and Hookean springs
             !Reduce final input for faster computation of equilibrium dist
@@ -94,9 +96,15 @@ program General_Dumbbell
                     delay_counter = delay_counter + dt
                     if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
                         call write_data_to_files_no_VR(steps)
-                        call write_distribution_to_file(steps)
                         if (delay_counter.ge.(output_delay-1.D-10)) then
                             delay_counter = delay_counter - output_delay
+                        end if
+                    end if
+                    delay_counter_dist = delay_counter_dist + dt
+                    if ((steps.eq.1).or.(delay_counter_dist.ge.(output_delay_dist-1.D-10)).or.(steps.eq.NTimeSteps)) then
+                        call write_distribution_to_file(steps)
+                        if (delay_counter_dist.ge.(output_delay_dist-1.D-10)) then
+                            delay_counter_dist = delay_counter_dist - output_delay_dist
                         end if
                     end if
                 end do
@@ -115,10 +123,16 @@ program General_Dumbbell
                     !$OMP END DO
                     delay_counter = delay_counter + dt
                     if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
-                        call write_data_to_files_with_VR(steps)
-                        call write_distribution_to_file(steps)
+                        call write_data_to_files_no_VR(steps)
                         if (delay_counter.ge.(output_delay-1.D-10)) then
                             delay_counter = delay_counter - output_delay
+                        end if
+                    end if
+                    delay_counter_dist = delay_counter_dist + dt
+                    if ((steps.eq.1).or.(delay_counter_dist.ge.(output_delay_dist-1.D-10)).or.(steps.eq.NTimeSteps)) then
+                        call write_distribution_to_file(steps)
+                        if (delay_counter_dist.ge.(output_delay_dist-1.D-10)) then
+                            delay_counter_dist = delay_counter_dist - output_delay_dist
                         end if
                     end if
                 end do
@@ -136,6 +150,7 @@ program General_Dumbbell
             dt = timestepwidths(timestep)
             NtimeSteps = int(Nrelax_times/dt)
             delay_counter = 0.D0
+            delay_counter_dist = 0.D0
 
             !Also works for Fraenkel, FENE and Hookean springs
             !Reduce final input for faster computation of equilibrium dist
@@ -162,9 +177,15 @@ program General_Dumbbell
                     delay_counter = delay_counter + dt
                     if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
                         call write_data_to_files_no_VR(steps)
-                        call write_distribution_to_file(steps)
                         if (delay_counter.ge.(output_delay-1.D-10)) then
                             delay_counter = delay_counter - output_delay
+                        end if
+                    end if
+                    delay_counter_dist = delay_counter_dist + dt
+                    if ((steps.eq.1).or.(delay_counter_dist.ge.(output_delay_dist-1.D-10)).or.(steps.eq.NTimeSteps)) then
+                        call write_distribution_to_file(steps)
+                        if (delay_counter_dist.ge.(output_delay_dist-1.D-10)) then
+                            delay_counter_dist = delay_counter_dist - output_delay_dist
                         end if
                     end if
                 end do
@@ -183,10 +204,16 @@ program General_Dumbbell
                     !$OMP END DO
                     delay_counter = delay_counter + dt
                     if ((steps.eq.1).or.(delay_counter.ge.(output_delay-1.D-10)).or.(steps.eq.NTimeSteps)) then
-                        call write_data_to_files_with_VR(steps)
-                        call write_distribution_to_file(steps)
+                        call write_data_to_files_no_VR(steps)
                         if (delay_counter.ge.(output_delay-1.D-10)) then
                             delay_counter = delay_counter - output_delay
+                        end if
+                    end if
+                    delay_counter_dist = delay_counter_dist + dt
+                    if ((steps.eq.1).or.(delay_counter_dist.ge.(output_delay_dist-1.D-10)).or.(steps.eq.NTimeSteps)) then
+                        call write_distribution_to_file(steps)
+                        if (delay_counter_dist.ge.(output_delay_dist-1.D-10)) then
+                            delay_counter_dist = delay_counter_dist - output_delay_dist
                         end if
                     end if
                 end do

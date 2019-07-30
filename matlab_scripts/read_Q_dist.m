@@ -5,14 +5,18 @@ dtData = dlmread('timestepdata.inp', '');
 dt = dtData(2:end, 1)';
 Nrelax_times = dtData(1, 3);
 Ntraj = dtData(1,1);
-delay = dtData(1,4);
-size_steps=floor(Nrelax_times/delay+1)+1;
+delay = dtData(1,5);
+size_steps=floor(Nrelax_times/delay+1);
 fileID = fopen('Q_dist_output.dat', 'r');
+
+inpdata = dlmread('inputparameters.inp', '');
+sigma = inpdata(4);
+alpha = inpdata(2);
 
 tic
 data = nan(Ntraj, 3, length(dt), size_steps);
 
-file = 'Q_dist_output.dat';
+file = 'Q_dist_output_sr0.dat';
 fid = fopen(file, 'rb');
 
 for i=1:length(dt)
@@ -53,7 +57,55 @@ end
 fclose(fid);
 toc
 
+%% Histogram plot
+
+width = 2*sqrt(alpha)/(100-1);
+Q = max(0,(sigma-sqrt(alpha))):width:(sigma+sqrt(alpha));
+Q(1) = Q(1) + 0.00000001;
+Q(end) = Q(end) - 0.00000001;
+
+phiQ = -alpha/2*log(1-(Q-sigma).^2/alpha);
+Jeq = trapz(Q, exp(-phiQ).*Q.^2);
+% Jeq = (1/(alpha+3)+sigma.^2/alpha)*beta(1/2,(alpha+2)/2)*alpha^1.5;
+psiQ = Q.^2.*exp(-phiQ)./Jeq;
+
+i = 4;
+
+aniFigDist = figure();
+hold on
+plot(Q, psiQ, 'k-', 'Linewidth', 2, 'DisplayName', 'Analytical PDF at EQ');
+j = 5;
+Ql = sqrt(data(:,1,i,j).^2 + data(:,2,i,j).^2 + data(:,3,i,j).^2);
+h1 = histogram(Ql, Q, 'Normalization', 'pdf');
+
+FramesDist(1) = getframe(aniFigDist);
+
+for j = 2:size_steps-1
+    Ql = sqrt(data(:,1,i,j).^2 + data(:,2,i,j).^2 + data(:,3,i,j).^2);
+    h1.Data = Ql;
+    drawnow limitrate
+    FramesDist(j) = getframe(aniFigDist);
+end
+
+hold off
+
+movie2gif(FramesDist,'Q_dist_evo.gif','DelayTime', 0.5)
+
+%% testing F(X) results
+
+neg_fx = 0;
+
+for i = 1:1
+    for j=1:size_steps-1
+        Ql = sqrt(data(:,1,i,j).^2 + data(:,2,i,j).^2 + data(:,3,i,j).^2);
+        Fx = Ql + dt(i)/2*((Ql-sigma)./(1-(Ql-sigma).^2)/alpha);
+        neg_fx = neg_fx + sum(Fx(Fx<0));
+    end
+end
+
 %% Processing and plotting
+
+timestep = 4;
 
 k = [0 1 0; 0 0 0; 0 0 0];
 minX = -0.2;
@@ -77,7 +129,7 @@ for i=1:size(Xs,1)
 end
 
 tic
-[X,Y,Z] = getSurf(data, 1, 1, Ntraj);
+[X,Y,Z] = getSurf(data, timestep, 1, Ntraj);
 toc
 
 % 3D figure with shear flow lines
@@ -97,13 +149,14 @@ quiver3(Xs,Ys,Zs,...
 Frames(1) = getframe(aniFig);
 
 pause(3)
-for time = 2:size_steps
-    [X,Y,Z] = getSurf(data, 1, time, Ntraj);
+for time = 2:size_steps-1
+    [X,Y,Z] = getSurf(data, timestep, time, Ntraj);
     hAni.XData = X;
     hAni.YData = Y;
     hAni.ZData = Z;
     drawnow limitrate
     Frames(time) = getframe(aniFig);
+    pause(1)
     
 end
 drawnow
